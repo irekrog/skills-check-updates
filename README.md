@@ -124,6 +124,10 @@ GitHub requests use `GITHUB_TOKEN`, `GH_TOKEN` or `gh auth token` when available
 - `.agents`, `.claude` and their `skills` folders must be real directories inside the project. Individual skill symlinks are accepted when they resolve inside the project.
 - Upstream skill folders containing `#`, `@`, `:`, backslashes or terminal control characters are rejected because they cannot be passed literally to the installer.
 
+## Releases
+
+See [CHANGELOG.md](CHANGELOG.md) for the release history and [GitHub Releases](https://github.com/irekrog/skills-check-updates/releases) for versioned release notes.
+
 ## Development
 
 ```bash
