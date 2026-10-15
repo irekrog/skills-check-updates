@@ -1,4 +1,4 @@
-# skills-check-updates
+# 🔄 skills-check-updates
 
 `npm-check-updates` for agent skills. Reads the `skills-lock.json` written by the [`skills`](https://github.com/vercel-labs/skills) CLI, compares every skill with its GitHub source and reports what changed - without touching anything unless you ask.
 
@@ -18,16 +18,30 @@ Run scu -u to update 3 skills.
 
 `npx skills check` is an alias of `npx skills update`: it reinstalls right away, there is no read-only preview. It also silently overwrites local edits, and it cannot update skills whose lock entry has no `skillPath` (installed by older CLI versions).
 
-## Usage
+## 📦 Installation
+
+Install globally to use `skills-check-updates` or the shorter `scu`:
 
 ```bash
-npx skills-check-updates            # report only
-npx skills-check-updates -u         # reinstall outdated skills
-npx skills-check-updates -u --force # also overwrite skills with local changes
-npx skills-check-updates tdd shadcn # check selected skills
-npx skills-check-updates 'grill*'   # names accept * wildcards
-npx skills-check-updates --details  # commits, changed files and compare links
-npx skills-check-updates --json     # machine-readable report
+npm install -g skills-check-updates
+```
+
+Or run without installing globally:
+
+```bash
+npx skills-check-updates
+```
+
+## 🚀 Usage
+
+```bash
+scu            # report only
+scu -u         # reinstall outdated skills
+scu -u --force # also overwrite skills with local changes
+scu tdd shadcn # check selected skills
+scu 'grill*'   # names accept * wildcards
+scu --details  # commits, changed files and compare links
+scu --json     # machine-readable report
 ```
 
 ### Choosing skills
@@ -95,8 +109,6 @@ Without `--exit-code` a successful check always exits with 0.
 
 Details cost one extra GitHub API request per skill plus one per older commit inspected, so a token is strongly recommended.
 
-`scu` is a short alias for the same binary.
-
 | Status | Meaning | `-u` |
 | --- | --- | --- |
 | update available | upstream changed, local copy untouched | reinstalls |
@@ -128,7 +140,7 @@ GitHub requests use `GITHUB_TOKEN`, `GH_TOKEN` or `gh auth token` when available
 
 See [CHANGELOG.md](CHANGELOG.md) for the release history and [GitHub Releases](https://github.com/irekrog/skills-check-updates/releases) for versioned release notes.
 
-## Development
+## 🛠️ Development
 
 ```bash
 pnpm install
