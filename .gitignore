@@ -3,3 +3,6 @@ dist
 *.tgz
 .npmrc
 .DS_Store
+
+# Local Git workflow guide
+/GIT.md
