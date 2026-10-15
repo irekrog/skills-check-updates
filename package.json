@@ -1,0 +1,49 @@
+{
+  "name": "skills-check-updates",
+  "version": "0.1.0",
+  "description": "Find newer upstream versions of the agent skills listed in skills-lock.json - npm-check-updates for skills",
+  "keywords": [
+    "skills",
+    "agent-skills",
+    "claude-code",
+    "skills-lock",
+    "ncu"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Irek Róg",
+    "url": "https://github.com/irekrog"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/irekrog/skills-check-updates.git"
+  },
+  "homepage": "https://github.com/irekrog/skills-check-updates#readme",
+  "bugs": {
+    "url": "https://github.com/irekrog/skills-check-updates/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "bin": {
+    "skills-check-updates": "dist/cli.js",
+    "scu": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "7.0.2"
+  }
+}
