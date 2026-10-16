@@ -1,6 +1,6 @@
 {
   "name": "skills-check-updates",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Find newer upstream versions of the agent skills listed in skills-lock.json - npm-check-updates for skills",
   "keywords": [
     "skills",
