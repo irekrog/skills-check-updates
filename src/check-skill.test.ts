@@ -260,3 +260,60 @@ describe('checkSkill details', () => {
     assert.equal(details?.compareUrl, null);
   });
 });
+
+describe('checkSkill merge plan', () => {
+  const base = [file('SKILL.md', '---\nname: demo\n---\nv1'), file('references/a.md', 'a')];
+  const upstream = [file('SKILL.md', '---\nname: demo\n---\nv2'), file('references/a.md', 'a')];
+  const local = [file('SKILL.md', '---\nname: demo\n---\nv1'), file('references/a.md', 'a, mine')];
+  const planFor = async (localFiles: SkillFile[], entry = lockedAt(base), history = [upstream, base]) => {
+    const remote = createRemote(PREFIX, upstream, history);
+    const report = await checkSkill({ name: 'demo', repo: 'acme/skills', entry, localFiles, withDetails: false, withMerge: true, ...remote });
+    return { report, remote };
+  };
+
+  it('should merge local edits with upstream changes made to other files', async () => {
+    const { report } = await planFor(local);
+
+    assert.equal(report.status, 'conflict');
+    assert.equal(report.merge?.status, 'clean');
+    const files = report.merge?.status === 'clean' ? report.merge.files : [];
+    assert.deepEqual(Object.fromEntries(files.map(({ path, content }) => [path, content.toString()])), {
+      'SKILL.md': '---\nname: demo\n---\nv2',
+      'references/a.md': 'a, mine',
+    });
+  });
+
+  it('should find the base among older commits by the lock hash', async () => {
+    const middle = [file('SKILL.md', '---\nname: demo\n---\nv1.5'), file('references/a.md', 'a')];
+    const { report } = await planFor(local, lockedAt(base), [upstream, middle, base]);
+
+    assert.equal(report.merge?.status, 'clean');
+  });
+
+  it('should download only base files missing from the local and upstream copies', async () => {
+    const withNotes = [...base, file('notes.md', 'n')];
+    const remote = createRemote(PREFIX, upstream, [upstream, withNotes]);
+    const localFiles = [...base, file('notes.md', 'n, mine')];
+    await checkSkill({ name: 'demo', repo: 'acme/skills', entry: lockedAt(withNotes), localFiles, withDetails: false, withMerge: true, ...remote });
+
+    assert.deepEqual(remote.downloads.filter((path) => path.includes(':')), [`${'1'.repeat(40)}:${PREFIX}notes.md`]);
+  });
+
+  it('should report overlapping edits to the same file', async () => {
+    const { report } = await planFor([file('SKILL.md', '---\nname: demo\n---\nv1, mine'), file('references/a.md', 'a')]);
+
+    assert.deepEqual(report.merge, { status: 'conflict', paths: ['SKILL.md'] });
+  });
+
+  it('should explain when no upstream commit reproduces the lock hash', async () => {
+    const { report } = await planFor(local, lockedAt(base, { computedHash: 'stale' }));
+
+    assert.deepEqual(report.merge, { status: 'unavailable', reason: 'installed version not found in the last 2 upstream commits' });
+  });
+
+  it('should not plan a merge unless asked', async () => {
+    const report = await check(lockedAt(base), local, upstream, { history: [upstream, base] });
+
+    assert.equal(report.merge, undefined);
+  });
+});

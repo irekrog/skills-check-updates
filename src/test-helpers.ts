@@ -48,14 +48,21 @@ export const createRemote = (prefix: string, files: SkillFile[], history: SkillF
     downloads.push(entry.path);
     return match.content;
   };
+  const filesAt = (commit: string) => history[commits.findIndex((candidate) => candidate.sha === commit)] ?? [];
   const folderTree = async (commit: string): Promise<TreeEntry[]> => {
     historyReads.push(commit);
-    return toTree('', history[commits.findIndex((candidate) => candidate.sha === commit)] ?? []);
+    return toTree('', filesAt(commit));
+  };
+  const readFile = async (commit: string, entry: TreeEntry): Promise<Buffer> => {
+    const match = filesAt(commit).find((historyFile) => `${prefix}${historyFile.path}` === entry.path);
+    if (!match) throw new Error(`no fake file at ${entry.path} in ${commit}`);
+    downloads.push(`${commit}:${entry.path}`);
+    return match.content;
   };
   return {
     tree: toTree(prefix, files),
     readRemoteFile,
-    history: { commits: async () => commits, folderTree },
+    history: { commits: async () => commits, folderTree, readFile },
     downloads,
     historyReads,
   };

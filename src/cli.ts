@@ -8,10 +8,10 @@ import { parseDuration } from './duration.ts';
 import { createGitHubClient, resolveGitHubToken } from './github.ts';
 import { LOCK_FILE, readLock } from './lock.ts';
 import { createProgress } from './progress.ts';
-import { formatDetails, formatReport, isPlainUpToDate, pluralize } from './report.ts';
+import { formatDetails, formatReport, isPlainUpToDate, pluralize, toJsonReport } from './report.ts';
 import { selectSkillNames, splitList } from './select.ts';
 import { escapeTerminal } from './terminal.ts';
-import { isUpgradeTarget, upgradeSkill } from './upgrade.ts';
+import { isUpgradeTarget, upgradeSkill, type UpgradeOutcome } from './upgrade.ts';
 
 import type { SkillReport } from './check-skill.ts';
 
@@ -21,8 +21,9 @@ Check the skills listed in ${LOCK_FILE} for newer versions upstream.
 Without arguments every skill in the lock is checked. Skill names accept * wildcards.
 
 Options:
-  -u, --upgrade         Reinstall outdated skills with \`npx skills add\`
-  -f, --force           With --upgrade, also overwrite skills that have local changes
+  -u, --upgrade         Reinstall outdated skills with \`npx skills add\`, merging local
+                        changes back in when they do not overlap upstream changes (needs git)
+  -f, --force           With --upgrade, overwrite skills that have local changes instead
   -d, --details         Show installed and latest commits, changed files and a compare link
                         (lists up-to-date skills too when skill names are given)
       --skip <pattern>  Leave out matching skills (repeatable, comma separated, * wildcards)
@@ -39,6 +40,13 @@ GitHub requests use GITHUB_TOKEN, GH_TOKEN or \`gh auth token\` when available.`
 
 const EXIT_ERROR = 1;
 const EXIT_UPDATES_AVAILABLE = 2;
+
+const OUTCOME_LABELS: Record<UpgradeOutcome, { text: string; color: 'green' | 'yellow' | 'red' }> = {
+  updated: { text: 'done', color: 'green' },
+  merged: { text: 'done, local changes merged', color: 'green' },
+  skipped: { text: 'skipped', color: 'yellow' },
+  failed: { text: 'failed', color: 'red' },
+};
 
 const readVersion = async (): Promise<string> => {
   const packageJson: unknown = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
@@ -72,15 +80,22 @@ const printSummary = ({ reports, targets, isUpgrade, isForced, minAge }: Summary
   }
 };
 
-const runUpgrade = (cwd: string, targets: SkillReport[], stream: Pick<NodeJS.WriteStream, 'write'> = process.stdout): boolean => {
+type UpgradeInput = {
+  cwd: string;
+  targets: SkillReport[];
+  isForced: boolean;
+  stream: Pick<NodeJS.WriteStream, 'write'>;
+};
+
+const runUpgrade = async ({ cwd, targets, isForced, stream }: UpgradeInput): Promise<boolean> => {
   let isAllSuccessful = true;
   stream.write('\n');
-  for (const { name, installSource } of targets) {
-    if (installSource === null) continue;
-    stream.write(`Updating ${escapeTerminal(name)}... `);
-    const { isSuccess, output } = upgradeSkill(cwd, name, installSource);
-    stream.write(`${isSuccess ? styleText('green', 'done') : styleText('red', 'failed')}\n`);
-    if (!isSuccess) {
+  for (const report of targets) {
+    stream.write(`Updating ${escapeTerminal(report.name)}... `);
+    const { outcome, output } = await upgradeSkill(cwd, report, isForced);
+    const label = OUTCOME_LABELS[outcome];
+    stream.write(`${styleText(label.color, label.text)}\n`);
+    if (outcome === 'skipped' || outcome === 'failed') {
       isAllSuccessful = false;
       stream.write(`${styleText('dim', escapeTerminal(output))}\n`);
     }
@@ -132,6 +147,7 @@ const main = async (): Promise<void> => {
     names,
     client,
     withDetails: values.details,
+    withMerge: values.upgrade && !values.force,
     minAge,
     onSkillChecked: (report) => progress?.tick(report.name),
   });
@@ -140,7 +156,7 @@ const main = async (): Promise<void> => {
   const hasErrors = reports.some((report) => report.status === 'error');
 
   if (values.json) {
-    console.log(JSON.stringify(reports, null, 2).replace(/[\x7f-\x9f\u2028\u2029]/g, escapeTerminal));
+    console.log(JSON.stringify(reports.map(toJsonReport), null, 2).replace(/[\x7f-\x9f\u2028\u2029]/g, escapeTerminal));
   } else {
     const lines = values.details ? formatDetails(reports, hasExplicitNames) : formatReport(reports);
     console.log();
@@ -148,7 +164,8 @@ const main = async (): Promise<void> => {
     printSummary({ reports, targets, isUpgrade: values.upgrade, isForced: values.force, minAge: values['min-age'] });
   }
 
-  const isUpgradeSuccessful = values.upgrade ? runUpgrade(cwd, targets, values.json ? process.stderr : process.stdout) : true;
+  const stream = values.json ? process.stderr : process.stdout;
+  const isUpgradeSuccessful = values.upgrade ? await runUpgrade({ cwd, targets, isForced: values.force, stream }) : true;
   if (hasErrors || !isUpgradeSuccessful) {
     process.exitCode = EXIT_ERROR;
   } else if (values['exit-code'] && !values.upgrade && targets.length > 0) {

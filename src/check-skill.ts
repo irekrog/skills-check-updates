@@ -3,6 +3,7 @@ import { posix } from 'node:path';
 import { findSkillPath } from './find-skill-path.ts';
 import { readFrontmatterVersion } from './frontmatter.ts';
 import { folderHash, gitBlobSha, type SkillFile } from './hash.ts';
+import { mergeSkillFiles, type MergePlan } from './merge.ts';
 import {
   diffFiles,
   isHashedByCli,
@@ -52,11 +53,13 @@ export type SkillReport = {
   details?: SkillDetails;
   removedIn?: CommitInfo;
   heldUntil?: string;
+  merge?: MergePlan;
 };
 
 type History = {
   commits: (folder: string) => Promise<CommitInfo[]>;
   folderTree: (commit: string, folder: string) => Promise<TreeEntry[]>;
+  readFile: (commit: string, entry: TreeEntry) => Promise<Buffer>;
 };
 
 type CheckSkillInput = {
@@ -68,6 +71,7 @@ type CheckSkillInput = {
   readRemoteFile: (entry: TreeEntry) => Promise<Buffer>;
   history: History;
   withDetails: boolean;
+  withMerge?: boolean;
   minAge?: number;
   now?: number;
 };
@@ -86,13 +90,48 @@ const resolveSkillPath = async ({ name, entry, tree, readRemoteFile }: CheckSkil
   return findSkillPath(name, tree, readRemoteFile);
 };
 
+const planMerge = (base: SkillFile[], local: SkillFile[], upstream: SkillFile[]): MergePlan => {
+  const installed = (files: SkillFile[]) => files.filter((file) => isInstalledByCli(file.path));
+  try {
+    return mergeSkillFiles(installed(base), local, installed(upstream));
+  } catch (error) {
+    return { status: 'unavailable', reason: error instanceof Error ? error.message : String(error) };
+  }
+};
+
 const readVersion = (files: SkillFile[], skillFileName: string): string | null => {
   const skillFile = files.find((file) => file.path === skillFileName);
   return skillFile ? readFrontmatterVersion(skillFile.content.toString('utf8')) : null;
 };
 
+type BaseLookup = {
+  commits: CommitInfo[];
+  prefix: string;
+  computedHash: string;
+  folderTreeAt: (commit: string) => Promise<TreeEntry[]>;
+  readFile: History['readFile'];
+  knownContent: Map<string, Buffer>;
+};
+
+// Why: the lock hash is the upstream folder as it was installed, so the commit that
+// reproduces it is the common base of the local edits and the upstream changes.
+const findBaseFiles = async ({ commits, prefix, computedHash, folderTreeAt, readFile, knownContent }: BaseLookup) => {
+  for (const commit of commits.slice(1)) {
+    const entries = (await folderTreeAt(commit.sha)).filter((treeEntry) => isHashedByCli(treeEntry, ''));
+    const files = await Promise.all(
+      entries.map(async (treeEntry) => {
+        const content = knownContent.get(treeEntry.sha) ?? (await readFile(commit.sha, { ...treeEntry, path: `${prefix}${treeEntry.path}` }));
+        knownContent.set(treeEntry.sha, content);
+        return { path: treeEntry.path, content };
+      }),
+    );
+    if (folderHash(files) === computedHash) return files;
+  }
+  return null;
+};
+
 export const checkSkill = async (input: CheckSkillInput): Promise<SkillReport> => {
-  const { name, repo, entry, localFiles, tree, readRemoteFile, history, withDetails, minAge = 0, now = Date.now() } = input;
+  const { name, repo, entry, localFiles, tree, readRemoteFile, history, withDetails, withMerge = false, minAge = 0, now = Date.now() } = input;
   const skillPath = await resolveSkillPath(input);
   if (!skillPath) {
     const url = buildRepoUrl(repo, entry.ref);
@@ -136,11 +175,18 @@ export const checkSkill = async (input: CheckSkillInput): Promise<SkillReport> =
     folderHash(localFiles) === entry.computedHash ||
     folderHash([...localFiles, ...skippedRemoteFiles]) === entry.computedHash;
 
+  const folderTrees = new Map<string, Promise<TreeEntry[]>>();
+  const folderTreeAt = (commit: string): Promise<TreeEntry[]> => {
+    const cached = folderTrees.get(commit) ?? history.folderTree(commit, folder);
+    folderTrees.set(commit, cached);
+    return cached;
+  };
+
   const findInstalledIndex = async (commits: CommitInfo[]): Promise<number | null> => {
     // Why: the newest commit touching the folder holds the current upstream content.
     if (matchesUpstream) return commits.length > 0 ? 0 : null;
     for (const [index, commit] of commits.entries()) {
-      if (index > 0 && matchesFiles(listHashedFiles(await history.folderTree(commit.sha, folder), ''))) return index;
+      if (index > 0 && matchesFiles(listHashedFiles(await folderTreeAt(commit.sha), ''))) return index;
     }
     return null;
   };
@@ -158,6 +204,14 @@ export const checkSkill = async (input: CheckSkillInput): Promise<SkillReport> =
   const isHeld = minAge > 0 && HOLDABLE.includes(status) && releaseAt > now;
   const report: SkillReport = { name, status, installSource, url, hasStalePath };
   if (isHeld) report.heldUntil = new Date(releaseAt).toISOString();
+  if (withMerge && status === 'conflict' && !isHeld) {
+    const knownContent = new Map([...localFiles, ...remoteFiles].map((file) => [gitBlobSha(file.content), file.content]));
+    const { computedHash } = entry;
+    const base = await findBaseFiles({ commits, prefix, computedHash, folderTreeAt, readFile: history.readFile, knownContent });
+    report.merge = base
+      ? planMerge(base, localFiles, remoteFiles)
+      : { status: 'unavailable', reason: `installed version not found in the last ${commits.length} upstream commits` };
+  }
   if (!withDetails) return report;
 
   const skillFileName = posix.basename(skillPath);

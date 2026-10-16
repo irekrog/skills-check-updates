@@ -2,6 +2,17 @@
 
 Release history for `skills-check-updates`.
 
+## [Unreleased]
+
+### Added
+
+- `--upgrade` merges local edits with upstream changes file by file through `git merge-file`, using the upstream commit that reproduces the lock's `computedHash` as the base.
+
+### Changed
+
+- Skills with both local and upstream changes are now update targets: `--upgrade` merges them, skips them when the changes overlap and overwrites them only with `--force`. They count towards `--exit-code` 2, and a skipped merge makes `--upgrade` exit with 1.
+- With `--upgrade`, the JSON report includes a `merge` field for those skills.
+
 ## [0.1.0] - 2026-10-15
 
 Initial public release.
