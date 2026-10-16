@@ -12,6 +12,7 @@ type CheckSkillsInput = {
   names: string[];
   client: GitHubClient;
   withDetails?: boolean;
+  withMerge?: boolean;
   minAge?: number;
   onSkillChecked?: (report: SkillReport) => void;
 };
@@ -25,6 +26,7 @@ export const checkSkills = async ({
   names,
   client,
   withDetails = false,
+  withMerge = false,
   minAge = 0,
   onSkillChecked,
 }: CheckSkillsInput): Promise<SkillReport[]> => {
@@ -65,8 +67,9 @@ export const checkSkills = async ({
       const history = {
         commits: (folder: string) => client.fetchCommits(repo, ref, folder, HISTORY_DEPTH),
         folderTree: (commit: string, folder: string) => client.fetchFolderTree(repo, commit, folder),
+        readFile: (commit: string, treeEntry: TreeEntry) => client.fetchFile(repo, commit, treeEntry),
       };
-      return await checkSkill({ name, repo, entry, localFiles, tree, readRemoteFile, history, withDetails, minAge, now });
+      return await checkSkill({ name, repo, entry, localFiles, tree, readRemoteFile, history, withDetails, withMerge, minAge, now });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { name, status: 'error', installSource: null, url: buildRepoUrl(repo, entry.ref), hasStalePath, message };

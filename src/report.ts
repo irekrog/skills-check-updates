@@ -39,6 +39,12 @@ const FIELD_WIDTH = 10;
 
 export const pluralize = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`;
 
+// Why: merged file contents are only needed by --upgrade, the JSON report lists their paths.
+export const toJsonReport = ({ merge, ...report }: SkillReport) => {
+  if (!merge) return report;
+  return { ...report, merge: merge.status === 'clean' ? { status: merge.status, files: merge.files.map((file) => file.path) } : merge };
+};
+
 export const isPlainUpToDate = (report: SkillReport): boolean =>
   report.status === 'up-to-date' && !report.hasStalePath;
 

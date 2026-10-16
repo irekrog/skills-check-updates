@@ -1,7 +1,7 @@
-import { readdir, readFile } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, sep } from 'node:path';
 
-import { assertSafeSkillDirectories, SKILL_DIRS } from './install-paths.ts';
+import { assertSafeSkillDirectories, isInside, SKILL_DIRS } from './install-paths.ts';
 import { assertSkillName, sanitizeName } from './skill-name.ts';
 
 import type { SkillFile } from './hash.ts';
@@ -47,4 +47,36 @@ export const readInstalledSkill = async (cwd: string, name: string): Promise<Ski
     if (files) return files;
   }
   return null;
+};
+
+const realSkillDirs = async (cwd: string, name: string): Promise<string[]> => {
+  const dirs = new Set<string>();
+  for (const skillDir of SKILL_DIRS) {
+    try {
+      dirs.add(await realpath(join(cwd, skillDir, sanitizeName(name))));
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+    }
+  }
+  return [...dirs];
+};
+
+const writeInside = async (dir: string, path: string, content: Buffer): Promise<void> => {
+  const target = join(dir, path);
+  await mkdir(dirname(target), { recursive: true });
+  // Why: a folder the installer copied could be a symlink - never write through it.
+  if (!isInside(dir, await realpath(dirname(target)))) throw new Error(`unsafe skill file destination: ${target}`);
+  await rm(target, { force: true });
+  await writeFile(target, content);
+};
+
+export const replaceInstalledSkill = async (cwd: string, name: string, files: SkillFile[]): Promise<void> => {
+  assertSkillName(name);
+  assertSafeSkillDirectories(cwd, name);
+  const paths = new Set(files.map((file) => file.path));
+  for (const dir of await realSkillDirs(cwd, name)) {
+    const stale = ((await readSkillDir(dir)) ?? []).filter((file) => !paths.has(file.path));
+    for (const file of stale) await rm(join(dir, file.path), { force: true });
+    for (const file of files) await writeInside(dir, file.path, file.content);
+  }
 };

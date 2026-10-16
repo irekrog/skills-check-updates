@@ -36,8 +36,8 @@ npx skills-check-updates
 
 ```bash
 scu            # report only
-scu -u         # reinstall outdated skills
-scu -u --force # also overwrite skills with local changes
+scu -u         # update outdated skills, merging your local edits
+scu -u --force # overwrite local edits instead of merging
 scu tdd shadcn # check selected skills
 scu 'grill*'   # names accept * wildcards
 scu --details  # commits, changed files and compare links
@@ -79,7 +79,7 @@ scu --exit-code --min-age 7d
 | Exit code | Meaning |
 | --- | --- |
 | 0 | nothing to update |
-| 1 | an error (network, lock file, failed upgrade) |
+| 1 | an error (network, lock file, failed upgrade) or an update skipped because local and upstream changes overlap |
 | 2 | updates are available |
 
 Without `--exit-code` a successful check always exits with 0.
@@ -113,10 +113,20 @@ Details cost one extra GitHub API request per skill plus one per older commit in
 | --- | --- | --- |
 | update available | upstream changed, local copy untouched | reinstalls |
 | local changes | local copy edited, upstream unchanged | only with `--force` |
-| local changes + update available | both changed | only with `--force` |
+| local changes + update available | both changed | merges, skips when the changes overlap; `--force` overwrites |
 | up to date, lock needs skillPath | content current, but the lock has no or a moved `skillPath` | reinstalls to record the path |
 | not installed | in the lock, missing on disk | reinstalls |
 | not found upstream | the skill was removed from its repo | - |
+
+### Local edits
+
+`-u` keeps your edits to an installed skill. When upstream changed the same skill, scu finds the upstream version you installed - the commit whose folder reproduces the lock's `computedHash` - and merges file by file with `git merge-file`:
+
+- Changes to different files, or to different lines of the same file, are combined.
+- Changes to the same lines, a file deleted on one side and edited on the other, or binary files changed on both sides skip the update for that skill. Nothing is touched and `-u` exits with 1.
+- `--force` skips merging and installs the upstream version over your edits.
+
+The installed version must be among the last 20 commits that touched the skill folder, otherwise the update is skipped as well. Merging needs `git` on the `PATH`.
 
 ## How it works
 
@@ -124,7 +134,7 @@ Details cost one extra GitHub API request per skill plus one per older commit in
 - Files whose git blob sha matches a local file are not downloaded - a typical run needs one GitHub API request per source repo.
 - When the lock hash cannot prove the local copy is untouched (hashes written by older CLI versions do not always reproduce), the local copy is compared with the last 20 upstream versions of the folder before it is reported as edited.
 - Lock entries without `skillPath`, or with a path that no longer exists, are located by their `SKILL.md` frontmatter name.
-- `-u` runs `npx skills@latest add <source>/<folder> --skill <name> -y` per skill, the same command `npx skills update` uses, so skills land in the same agent folders and the lock is updated by the official CLI.
+- `-u` runs `npx skills@latest add <source>/<folder> --skill <name> -y` per skill, the same command `npx skills update` uses, so skills land in the same agent folders and the lock is updated by the official CLI. For a merged skill the merged files then replace the installer's copy, and the new upstream version in the lock becomes the base of the next merge.
 
 GitHub requests use `GITHUB_TOKEN`, `GH_TOKEN` or `gh auth token` when available; without a token the API allows 60 requests per hour.
 

@@ -2,6 +2,17 @@
 
 Release history for `skills-check-updates`.
 
+## [0.2.0] - 2026-10-16
+
+### Added
+
+- `--upgrade` merges local edits with upstream changes file by file through `git merge-file`, using the upstream commit that reproduces the lock's `computedHash` as the base.
+
+### Changed
+
+- Skills with both local and upstream changes are now update targets: `--upgrade` merges them, skips them when the changes overlap and overwrites them only with `--force`. They count towards `--exit-code` 2, and a skipped merge makes `--upgrade` exit with 1.
+- With `--upgrade`, the JSON report includes a `merge` field for those skills.
+
 ## [0.1.0] - 2026-10-15
 
 Initial public release.
@@ -28,4 +39,5 @@ Initial public release.
 - Match installed directory names to the `skills` CLI's name normalization so local edits and age holds are recognized for names such as `My Skill`.
 - Keep `--json --upgrade` output valid JSON by sending upgrade messages to stderr.
 
+[0.2.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.2.0
 [0.1.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.1.0

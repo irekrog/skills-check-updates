@@ -5,7 +5,7 @@ import { sanitizeName } from './skill-name.ts';
 
 export const SKILL_DIRS = ['.agents/skills', '.claude/skills'];
 
-const isInside = (root: string, path: string): boolean => {
+export const isInside = (root: string, path: string): boolean => {
   const rel = relative(root, path);
   return !isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`);
 };
