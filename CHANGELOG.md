@@ -2,6 +2,12 @@
 
 Release history for `skills-check-updates`.
 
+## [0.2.1] - 2026-10-16
+
+### Security
+
+- Pin the `skills` CLI that `--upgrade` runs to 1.7.2, the version whose folder hashing, name normalization and lock format scu mirrors, instead of `skills@latest`. A new or compromised `skills` release no longer runs automatically, and newer versions are adopted only after a deliberate bump.
+
 ## [0.2.0] - 2026-10-16
 
 ### Added
@@ -39,5 +45,6 @@ Initial public release.
 - Match installed directory names to the `skills` CLI's name normalization so local edits and age holds are recognized for names such as `My Skill`.
 - Keep `--json --upgrade` output valid JSON by sending upgrade messages to stderr.
 
+[0.2.1]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.2.1
 [0.2.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.2.0
 [0.1.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.1.0
