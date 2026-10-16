@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { checkSkills } from './check.ts';
+import { checkSkills, HISTORY_DEPTH } from './check.ts';
 import { folderHash } from './hash.ts';
 import { createProject, createRemote, file, writeSkillFiles } from './test-helpers.ts';
 import { isUpgradeTarget } from './upgrade.ts';
 
 import type { GitHubClient } from './github.ts';
 import type { LockEntry } from './lock.ts';
+import type { TestContext } from 'node:test';
 
 const prefix = 'skills/demo/';
 const v1 = [file('SKILL.md', '---\nname: demo\n---\nv1')];
@@ -21,10 +22,14 @@ const fakeClient = (remote = createRemote(prefix, v1)) => {
   const requests: string[] = [];
   const client: GitHubClient = {
     fetchTree: async (repo) => { requests.push(repo); return remote.tree; },
-    fetchFile: async (repo, _ref, entry) => { requests.push(repo); return remote.readRemoteFile(entry); },
-    fetchCommits: async (repo) => {
+    fetchFile: async (repo, ref, entry) => {
       requests.push(repo);
-      return (await remote.history.commits()).map((commit) => ({ ...commit, date: new Date().toISOString() }));
+      return ref === 'HEAD' ? remote.readRemoteFile(entry) : remote.history.readFile(ref, entry);
+    },
+    fetchCommits: async (repo, _ref, _path, limit) => {
+      requests.push(repo);
+      const commits = (await remote.history.commits()).slice(0, limit);
+      return commits.map((commit) => ({ ...commit, date: new Date().toISOString() }));
     },
     fetchFolderTree: async (repo, commit) => { requests.push(repo); return remote.history.folderTree(commit); },
   };
@@ -117,4 +122,39 @@ describe('checkSkills security regressions', () => {
       }
     }
   }
+});
+
+describe('checkSkills merge base window', () => {
+  // Note: newest first, so versions[0] is the current upstream folder.
+  const versions = Array.from({ length: HISTORY_DEPTH + 1 }, (_, index) => [
+    file('SKILL.md', `---\nname: demo\n---\nv${HISTORY_DEPTH + 1 - index}`),
+    file('notes.md', 'notes'),
+  ]);
+  const checkWithBaseAt = async (t: TestContext, baseIndex: number) => {
+    const base = versions[baseIndex] ?? [];
+    const cwd = await createProject(t);
+    await writeSkillFiles(cwd, '.agents/skills/demo', [...base.filter((skillFile) => skillFile.path !== 'notes.md'), file('notes.md', 'notes, mine')]);
+    const { client } = fakeClient(createRemote(prefix, versions[0] ?? [], versions));
+    const [report] = await checkSkills({
+      cwd, names: ['demo'], client, withMerge: true, lock: { version: 1, skills: { demo: entry({ computedHash: folderHash(base) }) } },
+    });
+    assert.ok(report);
+    assert.equal(report.status, 'conflict');
+    return report;
+  };
+
+  it('should merge when the installed version is the oldest commit inside the window', async (t) => {
+    const report = await checkWithBaseAt(t, HISTORY_DEPTH - 1);
+
+    assert.equal(report.merge?.status, 'clean');
+  });
+
+  it('should treat a base older than the window as unknown instead of merging', async (t) => {
+    const report = await checkWithBaseAt(t, HISTORY_DEPTH);
+
+    assert.deepEqual(report.merge, {
+      status: 'unavailable',
+      reason: `installed version not found in the last ${HISTORY_DEPTH} upstream commits`,
+    });
+  });
 });
