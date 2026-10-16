@@ -134,7 +134,7 @@ The installed version must be among the last 20 commits that touched the skill f
 - Files whose git blob sha matches a local file are not downloaded - a typical run needs one GitHub API request per source repo.
 - When the lock hash cannot prove the local copy is untouched (hashes written by older CLI versions do not always reproduce), the local copy is compared with the last 20 upstream versions of the folder before it is reported as edited.
 - Lock entries without `skillPath`, or with a path that no longer exists, are located by their `SKILL.md` frontmatter name.
-- `-u` runs `npx skills@latest add <source>/<folder> --skill <name> -y` per skill, the same command `npx skills update` uses, so skills land in the same agent folders and the lock is updated by the official CLI. For a merged skill the merged files then replace the installer's copy, and the new upstream version in the lock becomes the base of the next merge.
+- `-u` runs `npx skills@1.7.2 add <source>/<folder> --skill <name> -y` per skill, the same command `npx skills update` uses, so skills land in the same agent folders and the lock is updated by the official CLI. The version is pinned to the one whose hashing and naming rules scu mirrors, and is bumped deliberately after checking a new release. For a merged skill the merged files then replace the installer's copy, and the new upstream version in the lock becomes the base of the next merge.
 
 GitHub requests use `GITHUB_TOKEN`, `GH_TOKEN` or `gh auth token` when available; without a token the API allows 60 requests per hour.
 

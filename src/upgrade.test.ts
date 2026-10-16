@@ -72,7 +72,7 @@ describe('installSkill preflight', () => {
     const calls = recordInstaller(t);
 
     assert.equal(installSkill(cwd, 'My Skill', 'trusted/reviewed/skills/demo').isSuccess, true);
-    assert.deepEqual(calls[0]?.[1], ['--yes', 'skills@latest', 'add', 'trusted/reviewed/skills/demo', '--skill', 'My Skill', '-y']);
+    assert.deepEqual(calls[0]?.[1], ['--yes', 'skills@1.7.2', 'add', 'trusted/reviewed/skills/demo', '--skill', 'My Skill', '-y']);
     await symlink(outside, join(cwd, '.claude'), 'junction');
     assert.equal(installSkill(cwd, 'My Skill', 'trusted/reviewed/skills/demo').isSuccess, false);
     assert.equal(calls.length, 1);

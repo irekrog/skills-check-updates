@@ -21,6 +21,10 @@ type UpgradeResult = {
 
 type BlockedMerge = Exclude<MergePlan, { status: 'clean' }>;
 
+// Why: scu mirrors this version's folder hash, name normalization and lock format
+// (hash.ts, skill-name.ts) - bump it only after checking that they still match.
+const SKILLS_CLI = 'skills@1.7.2';
+
 const UPGRADABLE: SkillStatus[] = ['outdated', 'not-installed', 'conflict'];
 const UPGRADABLE_WITH_FORCE: SkillStatus[] = ['modified'];
 
@@ -40,7 +44,7 @@ export const installSkill = (cwd: string, name: string, installSource: string): 
   } catch (error) {
     return { isSuccess: false, output: error instanceof Error ? error.message : String(error) };
   }
-  const result = spawnSync('npx', ['--yes', 'skills@latest', 'add', installSource, '--skill', name, '-y'], {
+  const result = spawnSync('npx', ['--yes', SKILLS_CLI, 'add', installSource, '--skill', name, '-y'], {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],

@@ -60,7 +60,7 @@ describe('CLI security regressions', () => {
       assert.doesNotMatch(result.stderr, /[\x00-\x09\x0b-\x1f\x7f-\x9f]/);
       if (installerStatus !== 0) assert.ok(result.stderr.includes('\\u001b]0;scu\\u0007\\u000aforged\\u009b'));
       assert.deepEqual(JSON.parse(await readFile(record, 'utf8')), {
-        args: ['--yes', 'skills@latest', 'add', 'acme/skills/skills/demo', '--skill', 'demo', '-y'], cwd,
+        args: ['--yes', 'skills@1.7.2', 'add', 'acme/skills/skills/demo', '--skill', 'demo', '-y'], cwd,
       });
     });
   }
