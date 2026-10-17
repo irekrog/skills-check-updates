@@ -2,17 +2,9 @@
 
 `npm-check-updates` for agent skills. Reads the `skills-lock.json` written by the [`skills`](https://github.com/vercel-labs/skills) CLI, compares every skill with its GitHub source and reports what changed - without touching anything unless you ask.
 
-```
-$ npx skills-check-updates
+[![Demo: check for skill updates, inspect changes, and update while preserving local edits](docs/demo/skills-check-updates.gif)](https://github.com/irekrog/skills-check-updates/blob/main/docs/demo/skills-check-updates.mp4)
 
- find-skills                 update available                  https://github.com/vercel-labs/skills/tree/HEAD/skills/find-skills
- react-useeffect             up to date, lock needs skillPath  https://github.com/softaworks/agent-toolkit/tree/HEAD/skills/react-useeffect
- resolving-merge-conflicts   not found upstream                https://github.com/mattpocock/skills
- tdd                         update available                  https://github.com/mattpocock/skills/tree/HEAD/skills/engineering/tdd
-
-28 skills up to date.
-Run scu -u to update 3 skills.
-```
+[Watch the demo as a video (MP4)](https://github.com/irekrog/skills-check-updates/blob/main/docs/demo/skills-check-updates.mp4).
 
 ## Why
 
