@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createProject, createRemote, file } from './test-helpers.ts';
 
@@ -40,7 +40,7 @@ const fixture = async (t: TestContext, skillsLock = lock, installerStatus = 0) =
       return new Response(JSON.stringify({ tree: ${JSON.stringify(tree)}, truncated: false }));
     };
   `);
-  const run = (...args: string[]) => spawnSync(process.execPath, ['--import', preload, cliPath, '--cwd', cwd, ...args], {
+  const run = (...args: string[]) => spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, cliPath, '--cwd', cwd, ...args], {
     env: { NO_COLOR: '1', PATH: '', GITHUB_TOKEN: 'fixture-only' }, encoding: 'utf8', timeout: 10_000,
   });
   return { run, record, cwd };

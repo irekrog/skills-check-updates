@@ -16,13 +16,26 @@ concurrency:
 
 jobs:
   validate:
-    name: Node.js ${{ matrix.node-version }}
-    runs-on: ubuntu-latest
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        node-version: ['22.18.0', '24']
+        include:
+          # Keep the Ubuntu check names stable for branch protection.
+          - name: Node.js 22.18.0
+            os: ubuntu-latest
+            node-version: '22.18.0'
+          - name: Node.js 24
+            os: ubuntu-latest
+            node-version: '24'
+          - name: Node.js 24 (macOS)
+            os: macos-latest
+            node-version: '24'
+          - name: Node.js 24 (Windows)
+            os: windows-latest
+            node-version: '24'
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -49,3 +62,7 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Smoke test packed CLI
+        shell: bash
+        run: bash .github/scripts/smoke-package.sh
