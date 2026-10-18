@@ -34,7 +34,27 @@ scu tdd shadcn # check selected skills
 scu 'grill*'   # names accept * wildcards
 scu --details  # commits, changed files and compare links
 scu --json     # machine-readable report
+scu --ui       # interactive map of locally installed skills (opens your browser)
 ```
+
+### Exploring your skills: `--ui`
+
+`scu --ui` opens an offline, interactive mind map: project → source repositories → skills. Search by skill or source, fold branches, zoom, and select a skill to read its local `SKILL.md`, version and file count.
+
+```bash
+scu --ui
+scu --ui --from 'vercel-labs/*'
+scu --ui --skip 'internal-*'
+scu --ui 'review*'
+```
+
+The map reads the project's `skills-lock.json` and local `.agents/skills` / `.claude/skills` folders. Missing or unreadable skills stay visible with a separate label. Global skills and skills outside the lock are not included. This mode does not check upstream updates and cannot be combined with update or report options.
+
+The map is delivered from memory through a one-time URL on `127.0.0.1`, using a random access token and `Cache-Control: no-store`. No HTML snapshot is written to disk. The local server closes after delivering the page, or after five minutes if it is not opened. The loaded map keeps working without the server, but reloading the tab does not; run the command again to refresh the map.
+
+If your browser does not open automatically, open the printed URL within five minutes. The URL works only in a browser on the machine running `scu`, so it is not reachable from another computer, for example over SSH.
+
+The page contains the full local skill instructions, so do not share or manually save it if they contain secrets.
 
 ### Choosing skills
 

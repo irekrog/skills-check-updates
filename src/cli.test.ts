@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { createProject, createRemote, file } from './test-helpers.ts';
+import { createProject, createRemote, file, writeSkillFiles } from './test-helpers.ts';
 
 import type { SkillReport } from './check-skill.ts';
 import type { SkillsLock } from './lock.ts';
@@ -29,6 +29,7 @@ const fixture = async (t: TestContext, skillsLock = lock, installerStatus = 0) =
     import { writeFileSync } from 'node:fs';
     import { syncBuiltinESMExports } from 'node:module';
     childProcess.execFileSync = () => { throw new Error('external commands disabled'); };
+    childProcess.execFile = (command, args, callback) => callback(new Error('browser disabled'));
     childProcess.spawnSync = (command, args, options) => {
       if (command !== 'npx') throw new Error('unexpected command');
       writeFileSync(${JSON.stringify(record)}, JSON.stringify({ args, cwd: options.cwd }));
@@ -45,6 +46,55 @@ const fixture = async (t: TestContext, skillsLock = lock, installerStatus = 0) =
   });
   return { run, record, cwd };
 };
+
+describe('ui CLI', () => {
+  it('serves a filtered offline skill map without writing a snapshot if the browser cannot open', async (t) => {
+    const skillsLock = {
+      version: 1, skills: { demo: lock.skills.demo!, skipped: lock.skills.demo!, other: { ...lock.skills.demo!, source: 'other/repo' } },
+    };
+    const { run, cwd, record } = await fixture(t, skillsLock);
+    await writeSkillFiles(cwd, '.agents/skills/demo', [file('SKILL.md', 'Local instructions')]);
+    await writeFile(join(cwd, 'preload.mjs'), `
+      import { get } from 'node:http';
+      import fsPromises from 'node:fs/promises';
+      globalThis.fetch = () => { throw new Error('network disabled'); };
+      fsPromises.mkdtemp = fsPromises.writeFile = () => { throw new Error('snapshot writes disabled'); };
+      childProcess.execFile = (command, args, callback) => {
+        callback(new Error('browser disabled'));
+        get(args.at(-1), (response) => {
+          let html = '';
+          response.setEncoding('utf8');
+          response.on('data', (chunk) => { html += chunk; });
+          response.on('end', () => writeFileSync(${JSON.stringify(join(cwd, 'ui.html'))}, html));
+        });
+      };
+      syncBuiltinESMExports();
+    `, { flag: 'a' });
+    const result = run('--ui', '--from', 'acme/*', '--skip', 'skipped');
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stderr, /Could not open a browser/);
+    assert.equal(existsSync(record), false);
+    const url = result.stdout.match(/Skill map: (http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{64})/)?.[1];
+    assert.ok(url);
+    await assert.rejects(fetch(url));
+    const html = await readFile(join(cwd, 'ui.html'), 'utf8');
+    const data = JSON.parse(html.match(/id="skill-data">([\s\S]*?)<\/script>/)![1]!);
+    assert.deepEqual(data.skills.map((skill: { name: string }) => skill.name), ['demo']);
+    assert.equal(data.skills[0].status, 'installed');
+    assert.equal(await readFile(join(cwd, 'skills-lock.json'), 'utf8'), JSON.stringify(skillsLock));
+  });
+
+  for (const option of ['-u', '--force', '--json', '--details', '--exit-code', '--min-age=7d']) {
+    it(`rejects --ui with ${option} before writing a report or installing`, async (t) => {
+      const { run, record } = await fixture(t);
+      const result = run('--ui', option);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /--ui is an offline skill map/);
+      assert.equal(result.stdout, '');
+      assert.equal(existsSync(record), false);
+    });
+  }
+});
 
 describe('CLI security regressions', () => {
   for (const installerStatus of [0, 1]) {

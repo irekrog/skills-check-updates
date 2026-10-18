@@ -12,6 +12,7 @@ import { formatDetails, formatReport, isPlainUpToDate, pluralize, toJsonReport }
 import { selectSkillNames, splitList } from './select.ts';
 import { escapeTerminal } from './terminal.ts';
 import { isUpgradeTarget, upgradeSkill, type UpgradeOutcome } from './upgrade.ts';
+import { openUi } from './ui.ts';
 
 import type { SkillReport } from './check-skill.ts';
 
@@ -32,6 +33,7 @@ Options:
                         e.g. 7 (days), 7d, 12h, 30m
       --exit-code       Exit with 2 when updates are available (0 when none, 1 on errors)
       --json            Print the report as JSON
+      --ui              Open an interactive local skill map (offline, project lock only)
       --cwd <dir>       Project directory (default: current directory)
   -h, --help            Show this help
   -v, --version         Show the version
@@ -115,6 +117,7 @@ const main = async (): Promise<void> => {
       'min-age': { type: 'string' },
       'exit-code': { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
+      ui: { type: 'boolean', default: false },
       cwd: { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'v', default: false },
@@ -129,6 +132,9 @@ const main = async (): Promise<void> => {
     console.log(await readVersion());
     return;
   }
+  if (values.ui && (values.upgrade || values.force || values.details || values.json || values['min-age'] !== undefined || values['exit-code'])) {
+    throw new Error('--ui is an offline skill map; use it separately from update and report options');
+  }
 
   const cwd = resolve(values.cwd ?? process.cwd());
   const minAge = values['min-age'] === undefined ? 0 : parseDuration(values['min-age']);
@@ -139,6 +145,10 @@ const main = async (): Promise<void> => {
     skip: splitList(values.skip),
     from: splitList(values.from),
   });
+  if (values.ui) {
+    await openUi(cwd, lock, names);
+    return;
+  }
   const progress = values.json ? null : createProgress(`Checking ${LOCK_FILE}`, names.length);
   const client = createGitHubClient(resolveGitHubToken());
   const reports = await checkSkills({
