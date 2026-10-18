@@ -1,8 +1,13 @@
-node_modules
-dist
+node_modules/
+dist/
 *.tgz
 .npmrc
 .DS_Store
 
-# Local Git workflow guide
+# Local tooling, demo sources and dogfooded skills
 /GIT.md
+/demo/
+/skills-lock.json
+/.agents/
+/.claude/
+/.hallmark/
