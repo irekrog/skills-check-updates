@@ -2,6 +2,19 @@
 
 Release history for `skills-check-updates`.
 
+## [0.3.0] - 2026-10-18
+
+### Added
+
+- `--ui` opens an offline, interactive map of the project's locked skills, grouped by source repository, with search, collapsible branches and zoom.
+- Select a skill to read its local `SKILL.md`, declared version and file count; missing and unreadable skills remain visible.
+- Apply the existing name, `--from` and `--skip` filters to the map without checking upstream or modifying installed skills.
+
+### Security
+
+- Deliver the map from memory through a one-time, token-protected loopback URL with caching disabled; the server closes after delivery or five minutes.
+- Display skill instructions as inert text and reject combinations of `--ui` with update or report options.
+
 ## [0.2.1] - 2026-10-16
 
 ### Security
@@ -45,6 +58,7 @@ Initial public release.
 - Match installed directory names to the `skills` CLI's name normalization so local edits and age holds are recognized for names such as `My Skill`.
 - Keep `--json --upgrade` output valid JSON by sending upgrade messages to stderr.
 
+[0.3.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.3.0
 [0.2.1]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.2.1
 [0.2.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.2.0
 [0.1.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.1.0
