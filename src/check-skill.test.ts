@@ -52,7 +52,10 @@ describe('checkSkill', () => {
   });
 
   it('should report outdated when upstream changed since install', async () => {
-    assert.equal((await check(lockedAt(v1), v1, v2)).status, 'outdated');
+    const report = await check(lockedAt(v1), v1, v2);
+
+    assert.equal(report.status, 'outdated');
+    assert.equal(report.latestHash, folderHash(v2));
   });
 
   it('should report modified when only the local copy changed', async () => {
