@@ -5,6 +5,7 @@ import { buildRepoUrl, getGitHubRepo } from './source.ts';
 
 import type { GitHubClient, TreeEntry } from './github.ts';
 import type { SkillsLock } from './lock.ts';
+import type { ScanUpdate } from './scan.ts';
 
 type CheckSkillsInput = {
   cwd: string;
@@ -14,6 +15,7 @@ type CheckSkillsInput = {
   withDetails?: boolean;
   withMerge?: boolean;
   minAge?: number;
+  scanUpdate?: ScanUpdate;
   onSkillChecked?: (report: SkillReport) => void;
 };
 
@@ -28,6 +30,7 @@ export const checkSkills = async ({
   withDetails = false,
   withMerge = false,
   minAge = 0,
+  scanUpdate,
   onSkillChecked,
 }: CheckSkillsInput): Promise<SkillReport[]> => {
   const now = Date.now();
@@ -69,7 +72,7 @@ export const checkSkills = async ({
         folderTree: (commit: string, folder: string) => client.fetchFolderTree(repo, commit, folder),
         readFile: (commit: string, treeEntry: TreeEntry) => client.fetchFile(repo, commit, treeEntry),
       };
-      return await checkSkill({ name, repo, entry, localFiles, tree, readRemoteFile, history, withDetails, withMerge, minAge, now });
+      return await checkSkill({ name, repo, entry, localFiles, tree, readRemoteFile, history, withDetails, withMerge, minAge, now, scanUpdate });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { name, status: 'error', installSource: null, url: buildRepoUrl(repo, entry.ref), hasStalePath, message };

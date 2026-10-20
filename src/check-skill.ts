@@ -18,6 +18,7 @@ import { buildCompareUrl, buildInstallSource, buildRepoUrl, getSkillFolder } fro
 
 import type { CommitInfo, TreeEntry } from './github.ts';
 import type { LockEntry } from './lock.ts';
+import type { ScanUpdate, UpdateScan } from './scan.ts';
 
 export type SkillStatus =
   | 'up-to-date'
@@ -56,6 +57,7 @@ export type SkillReport = {
   removedIn?: CommitInfo;
   heldUntil?: string;
   merge?: MergePlan;
+  scan?: UpdateScan;
 };
 
 type History = {
@@ -76,9 +78,12 @@ type CheckSkillInput = {
   withMerge?: boolean;
   minAge?: number;
   now?: number;
+  scanUpdate?: ScanUpdate;
 };
 
 const HOLDABLE: SkillStatus[] = ['outdated', 'conflict'];
+// Note: the statuses where an update installs a new upstream version.
+const SCANNABLE: SkillStatus[] = ['outdated', 'conflict'];
 
 const resolveStatus = (matchesUpstream: boolean, isLocalClean: boolean, isUpstreamChanged: boolean): SkillStatus => {
   if (matchesUpstream) return 'up-to-date';
@@ -133,7 +138,7 @@ const findBaseFiles = async ({ commits, prefix, computedHash, folderTreeAt, read
 };
 
 export const checkSkill = async (input: CheckSkillInput): Promise<SkillReport> => {
-  const { name, repo, entry, localFiles, tree, readRemoteFile, history, withDetails, withMerge = false, minAge = 0, now = Date.now() } = input;
+  const { name, repo, entry, localFiles, tree, readRemoteFile, history, withDetails, withMerge = false, minAge = 0, now = Date.now(), scanUpdate } = input;
   const skillPath = await resolveSkillPath(input);
   if (!skillPath) {
     const url = buildRepoUrl(repo, entry.ref);
@@ -213,6 +218,9 @@ export const checkSkill = async (input: CheckSkillInput): Promise<SkillReport> =
     report.merge = base
       ? planMerge(base, localFiles, remoteFiles)
       : { status: 'unavailable', reason: `installed version not found in the last ${commits.length} upstream commits` };
+  }
+  if (scanUpdate && SCANNABLE.includes(status)) {
+    report.scan = await scanUpdate(localFiles, remoteFiles.filter((file) => isInstalledByCli(file.path)));
   }
   if (!withDetails) return report;
 

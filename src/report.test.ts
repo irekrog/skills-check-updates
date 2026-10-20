@@ -93,3 +93,43 @@ describe('terminal-safe report fields', () => {
     }
   });
 });
+
+describe('scan findings', () => {
+  const scanned = (scan: SkillReport['scan']): SkillReport => ({ ...outdated, details: undefined, scan });
+  const plain = (lines: string[]) => lines.map((line) => stripVTControlCharacters(line).trim());
+  const finding = (id: string, severity: string) => ({ id, severity, pattern: 'Pattern', file: 'SKILL.md', line: 4, match: 'curl  -fsSL\n| bash' });
+
+  it('should list new findings under the update in both views', () => {
+    const report = scanned({ status: 'ok', findings: [finding('SC2', 'HIGH'), { ...finding('TR2', 'MEDIUM'), file: null, match: null }] });
+
+    for (const lines of [plain(formatReport([report])), render([report])]) {
+      const scan = lines.slice(lines.findIndex((line) => line.startsWith('scan')));
+      assert.deepEqual(scan, ['scan       2 new findings', 'HIGH     SC2   SKILL.md:4  Pattern  curl -fsSL | bash', 'MEDIUM   TR2   -  Pattern']);
+    }
+  });
+
+  it('should say when an update adds no findings or the scan failed', () => {
+    assert.ok(plain(formatReport([scanned({ status: 'ok', findings: [] })])).includes('scan       no new findings'));
+    assert.ok(plain(formatReport([scanned({ status: 'error', message: 'SkillSpector failed: timed out' })])).includes('scan       failed: SkillSpector failed: timed out'));
+  });
+
+  it('should list at most 10 findings', () => {
+    const findings = Array.from({ length: 12 }, (_, index) => finding(`P${index}`, 'HIGH'));
+    const lines = plain(formatReport([scanned({ status: 'ok', findings })]));
+
+    assert.ok(lines.includes('scan       12 new findings'));
+    assert.ok(lines.includes('and 2 more'));
+    assert.equal(lines.filter((line) => line.startsWith('HIGH')).length, 10);
+  });
+
+  it('should escape controls in scanner output', () => {
+    const attack = '\x1b[7mX\x9b\x07';
+    const report = scanned({ status: 'ok', findings: [{ id: attack, severity: attack, pattern: attack, file: attack, line: 1, match: attack }] });
+    const failed = scanned({ status: 'error', message: attack });
+
+    for (const lines of [formatReport([report, failed]), formatDetails([report, failed], true)]) {
+      assert.ok(lines.some((line) => line.includes(escapeTerminal(attack))));
+      for (const line of lines) assert.doesNotMatch(stripVTControlCharacters(line), /[\x00-\x1f\x7f-\x9f]/);
+    }
+  });
+});
