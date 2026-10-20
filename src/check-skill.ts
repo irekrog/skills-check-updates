@@ -49,6 +49,8 @@ export type SkillReport = {
   installSource: string | null;
   url: string | null;
   hasStalePath: boolean;
+  // Note: the upstream folder hash this check saw; --upgrade expects the installer to record it.
+  latestHash?: string;
   message?: string;
   details?: SkillDetails;
   removedIn?: CommitInfo;
@@ -202,7 +204,7 @@ export const checkSkill = async (input: CheckSkillInput): Promise<SkillReport> =
   const latestCommit = commits[0] ?? null;
   const releaseAt = latestCommit ? Date.parse(latestCommit.date) + minAge : Number.NaN;
   const isHeld = minAge > 0 && HOLDABLE.includes(status) && releaseAt > now;
-  const report: SkillReport = { name, status, installSource, url, hasStalePath };
+  const report: SkillReport = { name, status, installSource, url, hasStalePath, latestHash: upstreamHash };
   if (isHeld) report.heldUntil = new Date(releaseAt).toISOString();
   if (withMerge && status === 'conflict' && !isHeld) {
     const knownContent = new Map([...localFiles, ...remoteFiles].map((file) => [gitBlobSha(file.content), file.content]));

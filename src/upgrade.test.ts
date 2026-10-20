@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
-import { mkdir, readdir, readFile, symlink } from 'node:fs/promises';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdir, readdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -9,6 +10,7 @@ import { createProject, file, writeSkillFiles } from './test-helpers.ts';
 import { installSkill, isUpgradeTarget, upgradeSkill } from './upgrade.ts';
 
 import type { SkillReport } from './check-skill.ts';
+import type { SkillFile } from './hash.ts';
 import type { TestContext } from 'node:test';
 
 const recordInstaller = (t: TestContext) => {
@@ -209,5 +211,81 @@ describe('upgradeSkill merge', () => {
 
     assert.equal(result.outcome, 'failed');
     assert.equal(await readFile(join(cwd, '.agents/skills/demo/SKILL.md'), 'utf8'), 'local');
+  });
+});
+
+describe('upgradeSkill installed version check', () => {
+  const lockWith = (computedHash: string): string =>
+    `${JSON.stringify({ version: 1, skills: { demo: { source: 'acme/skills', sourceType: 'github', skillPath: 'skills/demo/SKILL.md', computedHash } } }, null, 2)}\n`;
+
+  // Note: like `skills add`, replaces the canonical copy and records the hash of what it downloaded.
+  const fakeInstaller = (t: TestContext, cwd: string, computedHash: string | null, files: SkillFile[]) => {
+    t.mock.method(childProcess, 'spawnSync', () => {
+      const dir = join(cwd, '.agents/skills/demo');
+      rmSync(dir, { recursive: true, force: true });
+      for (const installed of files) {
+        mkdirSync(dirname(join(dir, installed.path)), { recursive: true });
+        writeFileSync(join(dir, installed.path), installed.content);
+      }
+      writeFileSync(join(cwd, 'skills-lock.json'), computedHash === null ? '{' : lockWith(computedHash));
+      return { status: 0, stdout: '', stderr: '' };
+    });
+    syncBuiltinESMExports();
+    t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  };
+
+  const installedProject = async (t: TestContext): Promise<string> => {
+    const cwd = await createProject(t);
+    await writeFile(join(cwd, 'skills-lock.json'), lockWith('installed'));
+    await writeSkillFiles(cwd, '.agents/skills/demo', [file('SKILL.md', 'local')]);
+    await writeSkillFiles(cwd, '.claude/skills/demo', [file('SKILL.md', 'local')]);
+    return cwd;
+  };
+
+  it('should keep the update when the installer records the checked version', async (t) => {
+    const cwd = await installedProject(t);
+    fakeInstaller(t, cwd, 'checked', [file('SKILL.md', 'upstream')]);
+
+    const result = await upgradeSkill(cwd, report({ status: 'outdated', latestHash: 'checked' }), false);
+
+    assert.equal(result.outcome, 'updated');
+    assert.equal(await readFile(join(cwd, '.agents/skills/demo/SKILL.md'), 'utf8'), 'upstream');
+  });
+
+  it('should restore the previous version when upstream changed after the check', async (t) => {
+    const cwd = await installedProject(t);
+    const lockBefore = await readFile(join(cwd, 'skills-lock.json'), 'utf8');
+    fakeInstaller(t, cwd, 'newer', [file('SKILL.md', 'unchecked'), file('scripts/payload.sh', 'unchecked')]);
+
+    const result = await upgradeSkill(cwd, report({ status: 'outdated', latestHash: 'checked' }), false);
+
+    assert.equal(result.outcome, 'skipped');
+    assert.match(result.output, /upstream changed after the check - previous version restored/);
+    assert.deepEqual(await readFolder(join(cwd, '.agents/skills/demo')), { 'SKILL.md': 'local' });
+    assert.deepEqual(await readFolder(join(cwd, '.claude/skills/demo')), { 'SKILL.md': 'local' });
+    assert.equal(await readFile(join(cwd, 'skills-lock.json'), 'utf8'), lockBefore);
+  });
+
+  it('should not merge local changes into a version the merge was not planned for', async (t) => {
+    const cwd = await installedProject(t);
+    fakeInstaller(t, cwd, 'newer', [file('SKILL.md', 'unchecked')]);
+    const merged = [file('SKILL.md', 'merged')];
+
+    const result = await upgradeSkill(cwd, report({ status: 'conflict', latestHash: 'checked', merge: { status: 'clean', files: merged } }), false);
+
+    assert.equal(result.outcome, 'skipped');
+    assert.equal(await readFile(join(cwd, '.agents/skills/demo/SKILL.md'), 'utf8'), 'local');
+  });
+
+  it('should restore the previous version when the lock is unreadable after installing', async (t) => {
+    const cwd = await installedProject(t);
+    const lockBefore = await readFile(join(cwd, 'skills-lock.json'), 'utf8');
+    fakeInstaller(t, cwd, null, [file('SKILL.md', 'upstream')]);
+
+    const result = await upgradeSkill(cwd, report({ status: 'outdated', latestHash: 'checked' }), false);
+
+    assert.equal(result.outcome, 'skipped');
+    assert.equal(await readFile(join(cwd, '.agents/skills/demo/SKILL.md'), 'utf8'), 'local');
+    assert.equal(await readFile(join(cwd, 'skills-lock.json'), 'utf8'), lockBefore);
   });
 });
