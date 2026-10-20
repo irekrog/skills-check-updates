@@ -9,8 +9,6 @@ Release history for `skills-check-updates`.
 - `--scan` runs [SkillSpector](https://github.com/NVIDIA/SkillSpector) (static analysis, no LLM) on the installed copy and the upstream version of every update, and lists the findings the update adds with their rule, file, line and matched text. Findings that only moved to another line, incomplete-analysis diagnostics (`AE1`) and SkillSpector's whole-skill risk score are left out.
 - With `--upgrade`, `--scan` holds back updates that add a HIGH or CRITICAL finding or whose scan failed, even with `--force`, and exits with 1. Held skills are marked with `heldByScan` in the JSON report.
 
-## [0.3.1] - 2026-10-20
-
 ### Security
 
 - `--upgrade` checks that the installer recorded the upstream version scu checked. When upstream changes between the check and the install, the skill's previous files and the lock are restored and the update is skipped, so a push during the update can no longer bypass `--min-age` or a planned merge.
@@ -72,7 +70,6 @@ Initial public release.
 - Keep `--json --upgrade` output valid JSON by sending upgrade messages to stderr.
 
 [0.4.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.4.0
-[0.3.1]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.3.1
 [0.3.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.3.0
 [0.2.1]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.2.1
 [0.2.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.2.0
