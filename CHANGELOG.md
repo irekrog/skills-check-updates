@@ -2,6 +2,12 @@
 
 Release history for `skills-check-updates`.
 
+## [0.3.1] - 2026-10-20
+
+### Security
+
+- `--upgrade` checks that the installer recorded the upstream version scu checked. When upstream changes between the check and the install, the skill's previous files and the lock are restored and the update is skipped, so a push during the update can no longer bypass `--min-age` or a planned merge.
+
 ## [0.3.0] - 2026-10-18
 
 ### Added
@@ -58,6 +64,7 @@ Initial public release.
 - Match installed directory names to the `skills` CLI's name normalization so local edits and age holds are recognized for names such as `My Skill`.
 - Keep `--json --upgrade` output valid JSON by sending upgrade messages to stderr.
 
+[0.3.1]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.3.1
 [0.3.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.3.0
 [0.2.1]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.2.1
 [0.2.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.2.0
