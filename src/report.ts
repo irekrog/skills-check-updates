@@ -60,6 +60,7 @@ const getLabel = (report: SkillReport): Label => {
   if (report.heldUntil) {
     return { text: `${STATUS_LABELS[report.status].text}, held until ${escapeTerminal(report.heldUntil.slice(0, DATE_LENGTH))}`, color: 'gray' };
   }
+  if (report.heldByScan) return { text: `${STATUS_LABELS[report.status].text}, held by scan`, color: 'red' };
   return report.status === 'up-to-date' && report.hasStalePath ? STALE_PATH_LABEL : STATUS_LABELS[report.status];
 };
 

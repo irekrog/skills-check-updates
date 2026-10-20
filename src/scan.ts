@@ -31,6 +31,9 @@ const MAX_ERROR_LENGTH = 200;
 // describes the scanner's coverage, not the skill, and long documentation triggers it.
 const IGNORED_RULES = new Set(['AE1']);
 const SEVERITY_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+// Why: lower severities fire on many harmless updates of popular skills, so they are
+// listed for review but do not hold an update back.
+const HOLDING_SEVERITIES = new Set(['CRITICAL', 'HIGH']);
 
 export const readSkillSpectorVersion = (): string => {
   let output: string;
@@ -90,6 +93,10 @@ export const newFindings = (before: ScanFinding[], after: ScanFinding[]): ScanFi
     })
     .sort(bySeverity);
 };
+
+// Note: a failed scan holds the update too - it was asked for and did not happen.
+export const holdsUpdate = (scan: UpdateScan): boolean =>
+  scan.status === 'error' || scan.findings.some((finding) => HOLDING_SEVERITIES.has(finding.severity));
 
 const writeSkill = async (dir: string, files: SkillFile[]): Promise<void> => {
   for (const file of files) {

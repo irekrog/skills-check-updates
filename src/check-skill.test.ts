@@ -325,14 +325,20 @@ describe('checkSkill merge plan', () => {
 });
 
 describe('checkSkill scan', () => {
-  const recordScans = () => {
+  const recordScans = (severity: string | null = null) => {
     const scans: { installed: string[]; upstream: string[] }[] = [];
     const scanUpdate: ScanUpdate = async (installed, upstream) => {
       scans.push({ installed: installed.map((scanned) => scanned.path), upstream: upstream.map((scanned) => scanned.path) });
-      return { status: 'ok', findings: [] };
+      const findings = severity ? [{ id: 'SC2', severity, pattern: null, file: 'SKILL.md', line: 1, match: null }] : [];
+      return { status: 'ok', findings };
     };
     return { scans, scanUpdate };
   };
+
+  it('should hold an update back when it adds a HIGH finding', async () => {
+    assert.equal((await check(lockedAt(v1), v1, v2, { scanUpdate: recordScans('HIGH').scanUpdate })).heldByScan, true);
+    assert.equal((await check(lockedAt(v1), v1, v2, { scanUpdate: recordScans('MEDIUM').scanUpdate })).heldByScan, undefined);
+  });
 
   it('should scan the installed copy and the files an update would install', async () => {
     const { scans, scanUpdate } = recordScans();

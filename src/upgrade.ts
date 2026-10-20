@@ -33,7 +33,7 @@ const UPGRADABLE: SkillStatus[] = ['outdated', 'not-installed', 'conflict'];
 const UPGRADABLE_WITH_FORCE: SkillStatus[] = ['modified'];
 
 export const isUpgradeTarget = (report: SkillReport, isForced: boolean): boolean => {
-  if (report.installSource === null || report.heldUntil) return false;
+  if (report.installSource === null || report.heldUntil || report.heldByScan) return false;
   if (UPGRADABLE.includes(report.status)) return true;
   // Why: a reinstall with an explicit folder makes `skills add` record the skillPath,
   // after which the official `skills update` can track the skill again.
