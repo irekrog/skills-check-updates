@@ -108,6 +108,13 @@ describe('scan findings', () => {
     }
   });
 
+  it('should label an update the scan held back', () => {
+    const report: SkillReport = { ...scanned({ status: 'ok', findings: [finding('SC2', 'HIGH')] }), heldByScan: true };
+
+    assert.ok(plain(formatReport([report]))[0]?.startsWith('tdd  update available, held by scan'));
+    assert.equal(render([report])[0], 'tdd  update available, held by scan');
+  });
+
   it('should say when an update adds no findings or the scan failed', () => {
     assert.ok(plain(formatReport([scanned({ status: 'ok', findings: [] })])).includes('scan       no new findings'));
     assert.ok(plain(formatReport([scanned({ status: 'error', message: 'SkillSpector failed: timed out' })])).includes('scan       failed: SkillSpector failed: timed out'));

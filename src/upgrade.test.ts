@@ -109,6 +109,11 @@ describe('isUpgradeTarget', () => {
     assert.equal(isUpgradeTarget(report({ status: 'conflict', heldUntil: '2026-10-27T10:00:00.000Z' }), true), false);
   });
 
+  it('should hold back updates the scan held, even when forced', () => {
+    assert.equal(isUpgradeTarget(report({ status: 'outdated', heldByScan: true }), false), false);
+    assert.equal(isUpgradeTarget(report({ status: 'conflict', heldByScan: true }), true), false);
+  });
+
   it('should skip skills without an install source', () => {
     assert.equal(isUpgradeTarget(report({ status: 'outdated', installSource: null }), true), false);
   });

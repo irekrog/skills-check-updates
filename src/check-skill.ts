@@ -4,6 +4,7 @@ import { findSkillPath } from './find-skill-path.ts';
 import { readFrontmatterVersion } from './frontmatter.ts';
 import { folderHash, gitBlobSha, type SkillFile } from './hash.ts';
 import { mergeSkillFiles, type MergePlan } from './merge.ts';
+import { holdsUpdate } from './scan.ts';
 import {
   diffFiles,
   isHashedByCli,
@@ -58,6 +59,7 @@ export type SkillReport = {
   heldUntil?: string;
   merge?: MergePlan;
   scan?: UpdateScan;
+  heldByScan?: boolean;
 };
 
 type History = {
@@ -221,6 +223,7 @@ export const checkSkill = async (input: CheckSkillInput): Promise<SkillReport> =
   }
   if (scanUpdate && SCANNABLE.includes(status)) {
     report.scan = await scanUpdate(localFiles, remoteFiles.filter((file) => isInstalledByCli(file.path)));
+    if (holdsUpdate(report.scan)) report.heldByScan = true;
   }
   if (!withDetails) return report;
 

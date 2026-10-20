@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { createUpdateScanner, newFindings, parseFindings, readSkillSpectorVersion, type ScanFinding } from './scan.ts';
+import { createUpdateScanner, holdsUpdate, newFindings, parseFindings, readSkillSpectorVersion, type ScanFinding } from './scan.ts';
 import { file } from './test-helpers.ts';
 
 import type { TestContext } from 'node:test';
@@ -191,5 +191,23 @@ describe('readSkillSpectorVersion', () => {
     t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 
     assert.throws(() => readSkillSpectorVersion(), /--scan needs SkillSpector on the PATH - install it with `uv tool install/);
+  });
+});
+
+describe('holdsUpdate', () => {
+  it('should hold an update that adds a HIGH or CRITICAL finding', () => {
+    assert.equal(holdsUpdate({ status: 'ok', findings: [finding('SC2', 'SKILL.md', { severity: 'HIGH' })] }), true);
+    assert.equal(holdsUpdate({ status: 'ok', findings: [finding('AST8', 'run.py', { severity: 'CRITICAL' })] }), true);
+  });
+
+  it('should only list MEDIUM and LOW findings', () => {
+    const findings = [finding('E1', 'SKILL.md', { severity: 'MEDIUM' }), finding('SC1', 'SKILL.md', { severity: 'LOW' })];
+
+    assert.equal(holdsUpdate({ status: 'ok', findings }), false);
+    assert.equal(holdsUpdate({ status: 'ok', findings: [] }), false);
+  });
+
+  it('should hold an update whose scan failed', () => {
+    assert.equal(holdsUpdate({ status: 'error', message: 'SkillSpector failed: timed out' }), true);
   });
 });

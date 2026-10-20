@@ -33,7 +33,8 @@ Options:
       --min-age <age>   Hold back updates whose latest change is younger than this,
                         e.g. 7 (days), 7d, 12h, 30m
       --scan            Scan updates with SkillSpector (static analysis) and list the findings
-                        the new version adds to the installed copy; needs skillspector on the PATH
+                        the new version adds to the installed copy; holds back updates that add
+                        HIGH or CRITICAL findings, even with --force; needs skillspector on the PATH
       --exit-code       Exit with 2 when updates are available (0 when none, 1 on errors)
       --json            Print the report as JSON
       --ui              Open an interactive local skill map (offline, project lock only)
@@ -71,10 +72,15 @@ type SummaryInput = {
 const printScanSummary = (reports: SkillReport[], scannerVersion: string): void => {
   const scanned = reports.filter((report) => report.scan?.status === 'ok');
   const withFindings = scanned.filter((report) => report.scan?.status === 'ok' && report.scan.findings.length > 0);
+  const heldCount = reports.filter((report) => report.heldByScan).length;
   const result = withFindings.length > 0
-    ? styleText('red', `new findings in ${pluralize(withFindings.length, 'update')} - review them before updating`)
+    ? `new findings in ${pluralize(withFindings.length, 'update')} - review them`
     : `no new findings in ${pluralize(scanned.length, 'update')}`;
   console.log(`Scan (SkillSpector ${escapeTerminal(scannerVersion)}, static analysis): ${result}.`);
+  if (heldCount > 0) {
+    const reason = `${pluralize(heldCount, 'update')} held back by a HIGH or CRITICAL finding or a failed scan`;
+    console.log(`${styleText('red', reason)} - to install one anyway, run ${styleText('cyan', 'scu -u <skill>')} without --scan.`);
+  }
 };
 
 const printSummary = ({ reports, targets, isUpgrade, isForced, minAge, scannerVersion }: SummaryInput): void => {
@@ -150,9 +156,6 @@ const main = async (): Promise<void> => {
   if (values.ui && (values.upgrade || values.force || values.details || values.json || values['min-age'] !== undefined || values['exit-code'] || values.scan)) {
     throw new Error('--ui is an offline skill map; use it separately from update and report options');
   }
-  if (values.scan && values.upgrade) {
-    throw new Error('--scan only reports findings and does not hold updates back yet - run scu --scan, review the findings, then scu -u');
-  }
 
   const cwd = resolve(values.cwd ?? process.cwd());
   const minAge = values['min-age'] === undefined ? 0 : parseDuration(values['min-age']);
@@ -196,7 +199,9 @@ const main = async (): Promise<void> => {
 
   const stream = values.json ? process.stderr : process.stdout;
   const isUpgradeSuccessful = values.upgrade ? await runUpgrade({ cwd, targets, isForced: values.force, stream }) : true;
-  if (hasErrors || !isUpgradeSuccessful) {
+  // Why: like an overlapping merge, an update held by the scan needs a person to look at it.
+  const hasScanHolds = values.upgrade && reports.some((report) => report.heldByScan);
+  if (hasErrors || !isUpgradeSuccessful || hasScanHolds) {
     process.exitCode = EXIT_ERROR;
   } else if (values['exit-code'] && !values.upgrade && targets.length > 0) {
     process.exitCode = EXIT_UPDATES_AVAILABLE;

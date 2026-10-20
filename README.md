@@ -35,6 +35,7 @@ scu 'grill*'   # names accept * wildcards
 scu --details  # commits, changed files and compare links
 scu --json     # machine-readable report
 scu --scan     # list security findings each update adds (needs SkillSpector)
+scu -u --scan  # update, but hold back updates that add HIGH or CRITICAL findings
 scu --ui       # interactive map of locally installed skills (opens your browser)
 ```
 
@@ -107,7 +108,21 @@ scu --scan
 - Findings are matched by rule and file, so a finding that only moved to another line is not new. `AE1`, a referenced file the scanner could not fully parse, is left out. SkillSpector's overall risk score is not shown: it rates the whole skill, so long-standing findings would hide what the update changed.
 - SkillSpector runs with `--no-llm`, so no skill content is sent to a model provider. Its dependency check can query [OSV.dev](https://osv.dev).
 - Both versions are written to temporary folders, which are removed after the scan. Scans run in parallel; one takes a few seconds, or about a minute for a skill with a hundred files.
-- `--scan` only reports: it does not hold updates back and cannot be combined with `-u` yet. With `--json`, each scanned skill has a `scan` field. A failed scan is shown on the skill and makes scu exit with 1.
+- With `--json`, each scanned skill has a `scan` field. A failed scan is shown on the skill and makes scu exit with 1.
+
+With `-u`, an update that adds a HIGH or CRITICAL finding, or whose scan failed, is held back - even with `--force` - and scu exits with 1. MEDIUM and LOW findings are listed but do not hold an update. After reviewing a held update, install it with `scu -u <skill>` without `--scan`.
+
+```bash
+scu -u --scan --min-age 7d
+```
+
+```
+ hallmark  update available, held by scan  https://github.com/nutlope/hallmark/tree/HEAD/skills/hallmark
+     scan       4 new findings
+                ...
+```
+
+Like `--min-age`, the scan covers updates of installed skills: a skill that is in the lock but not installed is installed without a scan.
 
 ### CI: `--exit-code`
 
@@ -118,7 +133,7 @@ scu --exit-code --min-age 7d
 | Exit code | Meaning |
 | --- | --- |
 | 0 | nothing to update |
-| 1 | an error (network, lock file, failed upgrade or scan) or an update skipped because local and upstream changes overlap |
+| 1 | an error (network, lock file, failed upgrade or scan) or an update skipped because local and upstream changes overlap or the scan held it back |
 | 2 | updates are available |
 
 Without `--exit-code` a successful check always exits with 0.

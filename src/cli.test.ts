@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { folderHash } from './hash.ts';
 import { createProject, createRemote, file, writeSkillFiles } from './test-helpers.ts';
 
 import type { SkillReport } from './check-skill.ts';
@@ -157,14 +158,57 @@ describe('CLI security regressions', () => {
 });
 
 describe('scan CLI', () => {
-  it('should reject --scan with --upgrade before checking or installing', async (t) => {
-    const { run, record } = await fixture(t);
-    const result = run('--scan', '-u');
+  // Note: an installed, unedited v1 of demo with a newer upstream version, and a fake scanner
+  // that reports `severity` only in the upstream copy.
+  const outdatedFixture = async (t: TestContext, severity: string) => {
+    const local = [file('SKILL.md', 'v1')];
+    const { run, record, cwd } = await fixture(t, { version: 1, skills: { demo: { ...lock.skills.demo!, computedHash: folderHash(local) } } });
+    await writeSkillFiles(cwd, '.agents/skills/demo', local);
+    const temp = join(cwd, 'tmp');
+    await mkdir(temp);
+    const issue = { id: 'SC2', severity, pattern: 'External Script Fetching', finding: 'curl | bash', location: { file: 'SKILL.md', start_line: 4 } };
+    await writeFile(join(cwd, 'preload.mjs'), `
+      import { readFileSync as readScanned } from 'node:fs';
+      process.env.TMPDIR = process.env.TEMP = process.env.TMP = ${JSON.stringify(temp)};
+      childProcess.execFileSync = (command) => {
+        if (command !== 'skillspector') throw new Error('external commands disabled');
+        return 'SkillSpector v2.13.0\\n';
+      };
+      childProcess.execFile = (command, args, options, callback) => {
+        if (command !== 'skillspector') throw new Error('unexpected command');
+        const isUpstream = readScanned(args[1] + '/SKILL.md', 'utf8') !== 'v1';
+        callback(null, JSON.stringify({ issues: isUpstream ? [${JSON.stringify(issue)}] : [] }), '');
+      };
+      syncBuiltinESMExports();
+      const fetchTree = globalThis.fetch;
+      globalThis.fetch = async (url) =>
+        String(url).startsWith('https://raw.githubusercontent.com/') ? new Response('---\\nname: demo\\n---\\n') : fetchTree(url);
+    `, { flag: 'a' });
+    return { run, record };
+  };
 
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /--scan only reports findings and does not hold updates back yet/);
-    assert.equal(result.stdout, '');
+  it('should hold back an update that adds a HIGH finding, even with --force', async (t) => {
+    const { run, record } = await outdatedFixture(t, 'HIGH');
+    const text = run('-u', '--scan', '--force');
+    const json = run('--json', '-u', '--scan');
+
+    assert.equal(text.status, 1, text.stderr);
+    assert.match(text.stdout, /demo {2}update available, held by scan/);
+    assert.match(text.stdout, /HIGH {5}SC2 {3}SKILL\.md:4 {2}External Script Fetching {2}curl \| bash/);
+    assert.match(text.stdout, /1 update held back by a HIGH or CRITICAL finding or a failed scan/);
+    assert.equal(json.status, 1, json.stderr);
+    assert.equal((JSON.parse(json.stdout) as SkillReport[])[0]?.heldByScan, true);
     assert.equal(existsSync(record), false);
+  });
+
+  it('should list a MEDIUM finding without holding the update back', async (t) => {
+    const { run, record } = await outdatedFixture(t, 'MEDIUM');
+    const result = run('-u', '--scan');
+
+    assert.match(result.stdout, /demo {2}update available {2}/);
+    assert.match(result.stdout, /MEDIUM {3}SC2/);
+    assert.ok(result.stdout.includes('Updating demo...'));
+    assert.equal(existsSync(record), true);
   });
 
   it('should explain how to install SkillSpector before checking', async (t) => {
