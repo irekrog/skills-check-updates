@@ -84,7 +84,7 @@ describe('ui CLI', () => {
     assert.equal(await readFile(join(cwd, 'skills-lock.json'), 'utf8'), JSON.stringify(skillsLock));
   });
 
-  for (const option of ['-u', '--force', '--json', '--details', '--exit-code', '--min-age=7d']) {
+  for (const option of ['-u', '--force', '--json', '--details', '--exit-code', '--min-age=7d', '--scan']) {
     it(`rejects --ui with ${option} before writing a report or installing`, async (t) => {
       const { run, record } = await fixture(t);
       const result = run('--ui', option);
@@ -153,5 +153,26 @@ describe('CLI security regressions', () => {
     const [report] = JSON.parse(json.stdout) as SkillReport[];
     assert.equal(report?.message, `${sourceType} sources are not supported yet`);
     assert.equal(existsSync(record), false);
+  });
+});
+
+describe('scan CLI', () => {
+  it('should reject --scan with --upgrade before checking or installing', async (t) => {
+    const { run, record } = await fixture(t);
+    const result = run('--scan', '-u');
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /--scan only reports findings and does not hold updates back yet/);
+    assert.equal(result.stdout, '');
+    assert.equal(existsSync(record), false);
+  });
+
+  it('should explain how to install SkillSpector before checking', async (t) => {
+    const { run } = await fixture(t);
+    const result = run('--scan');
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /--scan needs SkillSpector on the PATH/);
+    assert.equal(result.stdout, '');
   });
 });

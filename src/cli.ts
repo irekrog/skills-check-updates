@@ -9,6 +9,7 @@ import { createGitHubClient, resolveGitHubToken } from './github.ts';
 import { LOCK_FILE, readLock } from './lock.ts';
 import { createProgress } from './progress.ts';
 import { formatDetails, formatReport, isPlainUpToDate, pluralize, toJsonReport } from './report.ts';
+import { createUpdateScanner, readSkillSpectorVersion } from './scan.ts';
 import { selectSkillNames, splitList } from './select.ts';
 import { escapeTerminal } from './terminal.ts';
 import { isUpgradeTarget, upgradeSkill, type UpgradeOutcome } from './upgrade.ts';
@@ -31,6 +32,8 @@ Options:
       --from <repo>     Only check skills from this source, e.g. mattpocock/skills or 'vercel-labs/*'
       --min-age <age>   Hold back updates whose latest change is younger than this,
                         e.g. 7 (days), 7d, 12h, 30m
+      --scan            Scan updates with SkillSpector (static analysis) and list the findings
+                        the new version adds to the installed copy; needs skillspector on the PATH
       --exit-code       Exit with 2 when updates are available (0 when none, 1 on errors)
       --json            Print the report as JSON
       --ui              Open an interactive local skill map (offline, project lock only)
@@ -62,9 +65,19 @@ type SummaryInput = {
   isUpgrade: boolean;
   isForced: boolean;
   minAge: string | undefined;
+  scannerVersion: string | null;
 };
 
-const printSummary = ({ reports, targets, isUpgrade, isForced, minAge }: SummaryInput): void => {
+const printScanSummary = (reports: SkillReport[], scannerVersion: string): void => {
+  const scanned = reports.filter((report) => report.scan?.status === 'ok');
+  const withFindings = scanned.filter((report) => report.scan?.status === 'ok' && report.scan.findings.length > 0);
+  const result = withFindings.length > 0
+    ? styleText('red', `new findings in ${pluralize(withFindings.length, 'update')} - review them before updating`)
+    : `no new findings in ${pluralize(scanned.length, 'update')}`;
+  console.log(`Scan (SkillSpector ${escapeTerminal(scannerVersion)}, static analysis): ${result}.`);
+};
+
+const printSummary = ({ reports, targets, isUpgrade, isForced, minAge, scannerVersion }: SummaryInput): void => {
   const upToDateCount = reports.filter(isPlainUpToDate).length;
   const withLocalChanges = reports.filter((report) => report.status === 'modified' || report.status === 'conflict');
   const heldCount = reports.filter((report) => report.heldUntil).length;
@@ -80,6 +93,7 @@ const printSummary = ({ reports, targets, isUpgrade, isForced, minAge }: Summary
   if (!isForced && withLocalChanges.length > 0) {
     console.log(`Local changes in ${pluralize(withLocalChanges.length, 'skill')} are kept - add --force to overwrite.`);
   }
+  if (scannerVersion !== null) printScanSummary(reports, scannerVersion);
 };
 
 type UpgradeInput = {
@@ -115,6 +129,7 @@ const main = async (): Promise<void> => {
       skip: { type: 'string', multiple: true, default: [] },
       from: { type: 'string', multiple: true, default: [] },
       'min-age': { type: 'string' },
+      scan: { type: 'boolean', default: false },
       'exit-code': { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
       ui: { type: 'boolean', default: false },
@@ -132,8 +147,11 @@ const main = async (): Promise<void> => {
     console.log(await readVersion());
     return;
   }
-  if (values.ui && (values.upgrade || values.force || values.details || values.json || values['min-age'] !== undefined || values['exit-code'])) {
+  if (values.ui && (values.upgrade || values.force || values.details || values.json || values['min-age'] !== undefined || values['exit-code'] || values.scan)) {
     throw new Error('--ui is an offline skill map; use it separately from update and report options');
+  }
+  if (values.scan && values.upgrade) {
+    throw new Error('--scan only reports findings and does not hold updates back yet - run scu --scan, review the findings, then scu -u');
   }
 
   const cwd = resolve(values.cwd ?? process.cwd());
@@ -149,6 +167,7 @@ const main = async (): Promise<void> => {
     await openUi(cwd, lock, names);
     return;
   }
+  const scannerVersion = values.scan ? readSkillSpectorVersion() : null;
   const progress = values.json ? null : createProgress(`Checking ${LOCK_FILE}`, names.length);
   const client = createGitHubClient(resolveGitHubToken());
   const reports = await checkSkills({
@@ -159,11 +178,12 @@ const main = async (): Promise<void> => {
     withDetails: values.details,
     withMerge: values.upgrade && !values.force,
     minAge,
+    scanUpdate: values.scan ? createUpdateScanner() : undefined,
     onSkillChecked: (report) => progress?.tick(report.name),
   });
   progress?.done();
   const targets = reports.filter((report) => isUpgradeTarget(report, values.force));
-  const hasErrors = reports.some((report) => report.status === 'error');
+  const hasErrors = reports.some((report) => report.status === 'error' || report.scan?.status === 'error');
 
   if (values.json) {
     console.log(JSON.stringify(reports.map(toJsonReport), null, 2).replace(/[\x7f-\x9f\u2028\u2029]/g, escapeTerminal));
@@ -171,7 +191,7 @@ const main = async (): Promise<void> => {
     const lines = values.details ? formatDetails(reports, hasExplicitNames) : formatReport(reports);
     console.log();
     for (const line of lines) console.log(line);
-    printSummary({ reports, targets, isUpgrade: values.upgrade, isForced: values.force, minAge: values['min-age'] });
+    printSummary({ reports, targets, isUpgrade: values.upgrade, isForced: values.force, minAge: values['min-age'], scannerVersion });
   }
 
   const stream = values.json ? process.stderr : process.stdout;

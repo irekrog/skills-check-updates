@@ -6,6 +6,7 @@ import { folderHash, type SkillFile } from './hash.ts';
 import { createRemote, fakeCommit, file } from './test-helpers.ts';
 
 import type { LockEntry } from './lock.ts';
+import type { ScanUpdate } from './scan.ts';
 
 const PREFIX = 'skills/demo/';
 const v1 = [file('SKILL.md', '---\nname: demo\n---\nv1'), file('references/a.md', 'a')];
@@ -23,13 +24,14 @@ const lockedAt = (files: SkillFile[], overrides: Partial<LockEntry> = {}): LockE
 type CheckOptions = {
   history?: SkillFile[][];
   withDetails?: boolean;
+  scanUpdate?: ScanUpdate;
 };
 
 const check = (
   entry: LockEntry,
   localFiles: SkillFile[] | null,
   upstream: SkillFile[],
-  { history, withDetails = false }: CheckOptions = {},
+  { history, withDetails = false, scanUpdate }: CheckOptions = {},
 ) =>
   checkSkill({
     name: 'demo',
@@ -37,6 +39,7 @@ const check = (
     entry,
     localFiles,
     withDetails,
+    scanUpdate,
     ...createRemote(PREFIX, upstream, history),
   });
 
@@ -318,5 +321,35 @@ describe('checkSkill merge plan', () => {
     const report = await check(lockedAt(base), local, upstream, { history: [upstream, base] });
 
     assert.equal(report.merge, undefined);
+  });
+});
+
+describe('checkSkill scan', () => {
+  const recordScans = () => {
+    const scans: { installed: string[]; upstream: string[] }[] = [];
+    const scanUpdate: ScanUpdate = async (installed, upstream) => {
+      scans.push({ installed: installed.map((scanned) => scanned.path), upstream: upstream.map((scanned) => scanned.path) });
+      return { status: 'ok', findings: [] };
+    };
+    return { scans, scanUpdate };
+  };
+
+  it('should scan the installed copy and the files an update would install', async () => {
+    const { scans, scanUpdate } = recordScans();
+    const metadata = file('metadata.json', '{}');
+
+    const report = await check(lockedAt([...v1, metadata]), edited, [...v2, metadata], { scanUpdate });
+
+    assert.equal(report.status, 'conflict');
+    assert.deepEqual(report.scan, { status: 'ok', findings: [] });
+    assert.deepEqual(scans, [{ installed: ['SKILL.md', 'references/a.md'], upstream: ['SKILL.md', 'references/a.md'] }]);
+  });
+
+  it('should not scan skills without an upstream change', async () => {
+    const { scans, scanUpdate } = recordScans();
+
+    assert.equal((await check(lockedAt(v1), v1, v1, { scanUpdate })).scan, undefined);
+    assert.equal((await check(lockedAt(v1), edited, v1, { scanUpdate })).scan, undefined);
+    assert.deepEqual(scans, []);
   });
 });

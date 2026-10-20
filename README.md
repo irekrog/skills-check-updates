@@ -34,6 +34,7 @@ scu tdd shadcn # check selected skills
 scu 'grill*'   # names accept * wildcards
 scu --details  # commits, changed files and compare links
 scu --json     # machine-readable report
+scu --scan     # list security findings each update adds (needs SkillSpector)
 scu --ui       # interactive map of locally installed skills (opens your browser)
 ```
 
@@ -82,6 +83,32 @@ scu -u --min-age 7d   # held updates are skipped, even with --force
 
 The whole update waits for the newest change - installing an older, already settled commit would pin the lock entry to that commit and stop future checks from seeing anything newer.
 
+### Scanning updates: `--scan`
+
+`--scan` runs [SkillSpector](https://github.com/NVIDIA/SkillSpector), NVIDIA's security scanner for agent skills, on the installed copy and on the upstream version of every update, and lists only the findings the update adds:
+
+```bash
+uv tool install git+https://github.com/NVIDIA/skillspector.git@v2.13.0   # once
+scu --scan
+```
+
+```
+ hallmark  update available  https://github.com/nutlope/hallmark/tree/HEAD/skills/hallmark
+     scan       4 new findings
+                HIGH     P2    references/assets.md:23  Hidden Instructions  <!-- TODO: Replace with real <thing>, target size: <WxH> -->
+                HIGH     P1    SKILL.md:186  Instruction Override  override system
+                HIGH     PE3   SKILL.md:186  Credential Access  access secrets
+                MEDIUM   E1    references/assets.md:122  External Transmission  https://api.svgl.app/
+ tdd       update available  https://github.com/mattpocock/skills/tree/HEAD/skills/engineering/tdd
+     scan       no new findings
+```
+
+- A finding is a hint, not a verdict. Static matching also flags harmless text, such as an HTML comment in an example (hidden instructions) or `/etc/passwd` in a test fixture (credential access), so read the matched text. An update without new findings is not proven safe.
+- Findings are matched by rule and file, so a finding that only moved to another line is not new. `AE1`, a referenced file the scanner could not fully parse, is left out. SkillSpector's overall risk score is not shown: it rates the whole skill, so long-standing findings would hide what the update changed.
+- SkillSpector runs with `--no-llm`, so no skill content is sent to a model provider. Its dependency check can query [OSV.dev](https://osv.dev).
+- Both versions are written to temporary folders, which are removed after the scan. Scans run in parallel; one takes a few seconds, or about a minute for a skill with a hundred files.
+- `--scan` only reports: it does not hold updates back and cannot be combined with `-u` yet. With `--json`, each scanned skill has a `scan` field. A failed scan is shown on the skill and makes scu exit with 1.
+
 ### CI: `--exit-code`
 
 ```bash
@@ -91,7 +118,7 @@ scu --exit-code --min-age 7d
 | Exit code | Meaning |
 | --- | --- |
 | 0 | nothing to update |
-| 1 | an error (network, lock file, failed upgrade) or an update skipped because local and upstream changes overlap |
+| 1 | an error (network, lock file, failed upgrade or scan) or an update skipped because local and upstream changes overlap |
 | 2 | updates are available |
 
 Without `--exit-code` a successful check always exits with 0.

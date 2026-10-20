@@ -5,6 +5,7 @@ import { escapeTerminal } from './terminal.ts';
 
 import type { SkillDetails, SkillReport, SkillStatus } from './check-skill.ts';
 import type { CommitInfo } from './github.ts';
+import type { ScanFinding, UpdateScan } from './scan.ts';
 import type { FileChange } from './skill-files.ts';
 
 type Color = Parameters<typeof styleText>[0];
@@ -29,11 +30,17 @@ const CHANGE_MARKS: Record<FileChange['change'], Label> = {
   removed: { text: '-', color: 'red' },
 };
 
+const SEVERITY_COLORS: Record<string, Color> = { CRITICAL: 'red', HIGH: 'red', MEDIUM: 'yellow', LOW: 'gray' };
+
 const SHORT_SHA_LENGTH = 7;
 const SHORT_HASH_LENGTH = 12;
 const DATE_LENGTH = 10;
 const MAX_MESSAGE_LENGTH = 60;
 const MAX_LISTED_CHANGES = 10;
+const MAX_LISTED_FINDINGS = 10;
+const MAX_MATCH_LENGTH = 60;
+const SEVERITY_WIDTH = 8;
+const RULE_WIDTH = 5;
 const FIELD_INDENT = '     ';
 const FIELD_WIDTH = 10;
 
@@ -66,13 +73,14 @@ export const formatReport = (reports: SkillReport[]): string[] => {
       name: escapeTerminal(report.name),
       label: getLabel(report),
       detail: escapeTerminal(report.message ?? report.url ?? ''),
+      scan: report.scan,
     }));
   const nameWidth = Math.max(0, ...rows.map((row) => row.name.length));
   const labelWidth = Math.max(0, ...rows.map((row) => row.label.text.length));
 
-  return rows.map(({ name, label, detail }) => {
+  return rows.flatMap(({ name, label, detail, scan }) => {
     const status = styleText(label.color, label.text.padEnd(labelWidth));
-    return ` ${name.padEnd(nameWidth)}  ${status}  ${styleText('dim', detail)}`;
+    return [` ${name.padEnd(nameWidth)}  ${status}  ${styleText('dim', detail)}`, ...(scan ? formatScan(scan) : [])];
   });
 };
 
@@ -80,6 +88,26 @@ const truncate = (text: string, maxLength: number): string =>
   text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 
 const field = (name: string, value: string): string => `${FIELD_INDENT}${styleText('dim', name.padEnd(FIELD_WIDTH))} ${value}`;
+
+const formatFinding = ({ id, severity, pattern, file, line, match }: ScanFinding): string => {
+  const location = file === null ? '-' : `${file}${line === null ? '' : `:${line}`}`;
+  const text = match === null ? '' : `  ${styleText('dim', escapeTerminal(truncate(match.replace(/\s+/g, ' ').trim(), MAX_MATCH_LENGTH)))}`;
+  const label = styleText(SEVERITY_COLORS[severity] ?? 'yellow', escapeTerminal(severity).padEnd(SEVERITY_WIDTH));
+  return `${label} ${escapeTerminal(id).padEnd(RULE_WIDTH)} ${escapeTerminal(location)}  ${escapeTerminal(pattern ?? '')}${text}`;
+};
+
+const formatScan = (scan: UpdateScan): string[] => {
+  if (scan.status === 'error') return [field('scan', styleText('red', `failed: ${escapeTerminal(scan.message)}`))];
+  const { findings } = scan;
+  if (findings.length === 0) return [field('scan', styleText('green', 'no new findings'))];
+  const listed = findings.slice(0, MAX_LISTED_FINDINGS).map(formatFinding);
+  const hiddenCount = findings.length - listed.length;
+  return [
+    field('scan', styleText('red', pluralize(findings.length, 'new finding'))),
+    ...listed.map((line) => field('', line)),
+    ...(hiddenCount > 0 ? [field('', styleText('dim', `and ${hiddenCount} more`))] : []),
+  ];
+};
 
 const formatCommit = (commit: CommitInfo | null): string => {
   if (!commit) return styleText('dim', `not found in the last ${HISTORY_DEPTH} upstream commits`);
@@ -123,6 +151,7 @@ const formatSkillDetails = (report: SkillReport): string[] => {
     ...(report.removedIn ? [field('removed', formatCommit(report.removedIn))] : []),
     ...(report.message ? [field('message', escapeTerminal(report.message))] : []),
     ...(report.url ? [field('source', escapeTerminal(report.url))] : []),
+    ...(report.scan ? formatScan(report.scan) : []),
   ];
 };
 
