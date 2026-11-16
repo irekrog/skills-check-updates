@@ -2,7 +2,7 @@
 
 Release history for `skills-check-updates`.
 
-## [Unreleased]
+## [0.4.1] - 2026-11-16
 
 ### Fixed
 
@@ -77,6 +77,7 @@ Initial public release.
 - Match installed directory names to the `skills` CLI's name normalization so local edits and age holds are recognized for names such as `My Skill`.
 - Keep `--json --upgrade` output valid JSON by sending upgrade messages to stderr.
 
+[0.4.1]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.4.1
 [0.4.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.4.0
 [0.3.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.3.0
 [0.2.1]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.2.1
