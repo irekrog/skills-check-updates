@@ -2,6 +2,14 @@
 
 Release history for `skills-check-updates`.
 
+## [Unreleased]
+
+### Fixed
+
+- Read the folder hashes that `skills` 1.8 writes into version 2 locks. Unedited skills installed or migrated by `skills` 1.8 are no longer reported as having local changes once upstream moves on, and `--upgrade` finds the merge base for their local edits again.
+- `--upgrade` runs `skills@1.8.1` for a version 2 lock. `skills@1.7.2` kept the lock's version 2 but recorded a legacy hash, so `skills` 1.8 then treated the updated skill as modified.
+- The summary no longer says that local changes are kept without updating: `scu -u` keeps them and merges upstream changes that do not overlap.
+
 ## [0.4.0] - 2026-10-20
 
 ### Added

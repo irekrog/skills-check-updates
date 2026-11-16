@@ -79,6 +79,30 @@ describe('installSkill preflight', () => {
     assert.equal(installSkill(cwd, 'My Skill', 'trusted/reviewed/skills/demo').isSuccess, false);
     assert.equal(calls.length, 1);
   });
+
+  it('should install with the skills version that writes the same lock version', async (t) => {
+    const cwd = await createProject(t);
+    const calls = recordInstaller(t);
+
+    installSkill(cwd, 'demo', 'acme/skills/skills/demo', 1);
+    installSkill(cwd, 'demo', 'acme/skills/skills/demo', 2);
+
+    assert.deepEqual(calls.map((call) => (call[1] as string[])[1]), ['skills@1.7.2', 'skills@1.8.1']);
+  });
+});
+
+describe('upgradeSkill installer version', () => {
+  for (const [lockVersion, expected] of [[1, 'skills@1.7.2'], [2, 'skills@1.8.1']] as const) {
+    it(`should run ${expected} for a version ${lockVersion} lock`, async (t) => {
+      const cwd = await createProject(t);
+      await writeFile(join(cwd, 'skills-lock.json'), JSON.stringify({ version: lockVersion, skills: {} }));
+      const calls = recordInstaller(t);
+
+      await upgradeSkill(cwd, report({ status: 'outdated' }), false);
+
+      assert.equal((calls[0]?.[1] as string[])[1], expected);
+    });
+  }
 });
 
 describe('isUpgradeTarget', () => {

@@ -25,9 +25,14 @@ type UpgradeResult = {
 
 type BlockedMerge = Exclude<MergePlan, { status: 'clean' }>;
 
-// Why: scu mirrors this version's folder hash, name normalization and lock format
-// (hash.ts, skill-name.ts) - bump it only after checking that they still match.
-const SKILLS_CLI = 'skills@1.7.2';
+// Why: scu mirrors these versions' folder hashes, name normalization and lock formats
+// (hash.ts, skill-name.ts) - bump them only after checking that they still match. Each
+// writes one lock version: 1.7 keeps a version 2 lock's version but records legacy
+// hashes in it, and 1.8 migrates a version 1 lock to version 2.
+const SKILLS_CLI_V1 = 'skills@1.7.2';
+const SKILLS_CLI_V2 = 'skills@1.8.1';
+
+const skillsCliFor = (lockVersion: number): string => (lockVersion >= 2 ? SKILLS_CLI_V2 : SKILLS_CLI_V1);
 
 const UPGRADABLE: SkillStatus[] = ['outdated', 'not-installed', 'conflict'];
 const UPGRADABLE_WITH_FORCE: SkillStatus[] = ['modified'];
@@ -41,14 +46,14 @@ export const isUpgradeTarget = (report: SkillReport, isForced: boolean): boolean
   return isForced && UPGRADABLE_WITH_FORCE.includes(report.status);
 };
 
-export const installSkill = (cwd: string, name: string, installSource: string): InstallResult => {
+export const installSkill = (cwd: string, name: string, installSource: string, lockVersion = 1): InstallResult => {
   try {
     assertSkillName(name);
     assertSafeSkillDirectories(cwd, name);
   } catch (error) {
     return { isSuccess: false, output: error instanceof Error ? error.message : String(error) };
   }
-  const result = spawnSync('npx', ['--yes', SKILLS_CLI, 'add', installSource, '--skill', name, '-y'], {
+  const result = spawnSync('npx', ['--yes', skillsCliFor(lockVersion), 'add', installSource, '--skill', name, '-y'], {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -71,6 +76,14 @@ type PreviousVersion = {
 const readPreviousVersion = async (cwd: string, name: string): Promise<PreviousVersion | null> => {
   const files = await readInstalledSkill(cwd, name);
   return files ? { lock: await readFile(join(cwd, LOCK_FILE)), files } : null;
+};
+
+const readLockVersion = async (cwd: string): Promise<number> => {
+  try {
+    return (await readLock(cwd)).version ?? 1;
+  } catch {
+    return 1;
+  }
 };
 
 const readInstalledHash = async (cwd: string, name: string): Promise<string | null> => {
@@ -100,7 +113,7 @@ export const upgradeSkill = async (cwd: string, report: SkillReport, isForced: b
 
   const previous = latestHash ? await readPreviousVersion(cwd, name).catch((error: unknown) => toError(error)) : null;
   if (previous instanceof Error) return { outcome: 'failed', output: previous.message };
-  const { isSuccess, output } = installSkill(cwd, name, installSource);
+  const { isSuccess, output } = installSkill(cwd, name, installSource, await readLockVersion(cwd));
   if (!isSuccess) return { outcome: 'failed', output };
   // Why: the installer downloads the source again, so a push after the check would
   // install a version scu never saw - one --min-age did not hold back or a merge did not plan for.

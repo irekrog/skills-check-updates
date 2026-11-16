@@ -97,7 +97,8 @@ const printSummary = ({ reports, targets, isUpgrade, isForced, minAge, scannerVe
     console.log(`${pluralize(heldCount, 'update')} held back - the latest change is younger than ${escapeTerminal(minAge ?? '')}.`);
   }
   if (!isForced && withLocalChanges.length > 0) {
-    console.log(`Local changes in ${pluralize(withLocalChanges.length, 'skill')} are kept - add --force to overwrite.`);
+    const merges = `${styleText('cyan', 'scu -u')} keeps them and merges upstream changes that do not overlap`;
+    console.log(`Local changes in ${pluralize(withLocalChanges.length, 'skill')}: ${merges} - add --force to overwrite them.`);
   }
   if (scannerVersion !== null) printScanSummary(reports, scannerVersion);
 };
