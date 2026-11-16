@@ -8,7 +8,11 @@
 
 ## Why
 
-`npx skills check` is an alias of `npx skills update`: it reinstalls right away, there is no read-only preview. It also silently overwrites local edits, and it cannot update skills whose lock entry has no `skillPath` (installed by older CLI versions).
+`npx skills update` reinstalls every skill whose upstream folder changed and silently overwrites your local edits. It cannot update skills whose lock entry has no `skillPath` (installed by older CLI versions); it only prints the `npx skills add` command to run.
+
+`npx skills check` no longer installs anything (it was an alias of `update` before `skills` 1.7.5). It names the skills that have an update and, since 1.8, the ones that differ from the lock, but not what changed. To take an update, you still have to choose between your edits and the upstream version.
+
+scu reports every update before anything is installed, with its commits and changed files under `--details`. It merges your edits with upstream changes, can hold back updates that are too recent or that add security findings, and updates skills without a `skillPath`.
 
 ## 📦 Installation
 
