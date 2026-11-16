@@ -2,7 +2,7 @@ import { posix } from 'node:path';
 
 import { findSkillPath } from './find-skill-path.ts';
 import { readFrontmatterVersion } from './frontmatter.ts';
-import { folderHash, gitBlobSha, type SkillFile } from './hash.ts';
+import { folderHash, gitBlobSha, isLockHashOf, lockHash, type SkillFile } from './hash.ts';
 import { mergeSkillFiles, type MergePlan } from './merge.ts';
 import { holdsUpdate } from './scan.ts';
 import {
@@ -81,6 +81,8 @@ type CheckSkillInput = {
   minAge?: number;
   now?: number;
   scanUpdate?: ScanUpdate;
+  // Note: skills-lock.json `version`, which decides the hash an update records.
+  lockVersion?: number;
 };
 
 const HOLDABLE: SkillStatus[] = ['outdated', 'conflict'];
@@ -134,13 +136,13 @@ const findBaseFiles = async ({ commits, prefix, computedHash, folderTreeAt, read
         return { path: treeEntry.path, content };
       }),
     );
-    if (folderHash(files) === computedHash) return files;
+    if (isLockHashOf(computedHash, files)) return files;
   }
   return null;
 };
 
 export const checkSkill = async (input: CheckSkillInput): Promise<SkillReport> => {
-  const { name, repo, entry, localFiles, tree, readRemoteFile, history, withDetails, withMerge = false, minAge = 0, now = Date.now(), scanUpdate } = input;
+  const { name, repo, entry, localFiles, tree, readRemoteFile, history, withDetails, withMerge = false, minAge = 0, now = Date.now(), scanUpdate, lockVersion } = input;
   const skillPath = await resolveSkillPath(input);
   if (!skillPath) {
     const url = buildRepoUrl(repo, entry.ref);
@@ -175,13 +177,13 @@ export const checkSkill = async (input: CheckSkillInput): Promise<SkillReport> =
   const localSignature = toSignature(localShas);
   const matchesFiles = (files: FileSha[]) => treeSignatures(files).includes(localSignature);
   const matchesUpstream = matchesFiles(upstreamFiles);
-  const upstreamHash = folderHash(remoteFiles);
-  const isUpstreamChanged = upstreamHash !== entry.computedHash;
+  const upstreamHash = lockHash(lockVersion, remoteFiles);
+  const isUpstreamChanged = !isLockHashOf(entry.computedHash, remoteFiles);
   const skippedRemoteFiles = remoteFiles.filter((file) => !isInstalledByCli(file.path));
-  // Why: the lock hash covers files the installer skips (metadata.json), so local
+  // Why: the legacy lock hash covers files the installer skips (metadata.json), so local
   // files alone never reproduce it for such skills - add the upstream copies back.
   const isLockClean =
-    folderHash(localFiles) === entry.computedHash ||
+    isLockHashOf(entry.computedHash, localFiles) ||
     folderHash([...localFiles, ...skippedRemoteFiles]) === entry.computedHash;
 
   const folderTrees = new Map<string, Promise<TreeEntry[]>>();

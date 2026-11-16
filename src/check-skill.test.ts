@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { checkSkill } from './check-skill.ts';
-import { folderHash, type SkillFile } from './hash.ts';
+import { folderHash, folderHashV2, type SkillFile } from './hash.ts';
 import { createRemote, fakeCommit, file } from './test-helpers.ts';
 
 import type { LockEntry } from './lock.ts';
@@ -25,13 +25,14 @@ type CheckOptions = {
   history?: SkillFile[][];
   withDetails?: boolean;
   scanUpdate?: ScanUpdate;
+  lockVersion?: number;
 };
 
 const check = (
   entry: LockEntry,
   localFiles: SkillFile[] | null,
   upstream: SkillFile[],
-  { history, withDetails = false, scanUpdate }: CheckOptions = {},
+  { history, withDetails = false, scanUpdate, lockVersion }: CheckOptions = {},
 ) =>
   checkSkill({
     name: 'demo',
@@ -40,6 +41,7 @@ const check = (
     localFiles,
     withDetails,
     scanUpdate,
+    lockVersion,
     ...createRemote(PREFIX, upstream, history),
   });
 
@@ -321,6 +323,45 @@ describe('checkSkill merge plan', () => {
     const report = await check(lockedAt(base), local, upstream, { history: [upstream, base] });
 
     assert.equal(report.merge, undefined);
+  });
+
+  it('should find the base by a hash that skills 1.8 wrote', async () => {
+    const { report } = await planFor(local, lockedAt(base, { computedHash: folderHashV2(base) }));
+
+    assert.equal(report.merge?.status, 'clean');
+  });
+});
+
+// Why: skills 1.8 writes version 2 locks with a new folder hash, and migrates the hashes of
+// unedited version 1 entries; scu --upgrade with skills 1.7.2 left legacy hashes in them.
+describe('checkSkill version 2 locks', () => {
+  const lockedV2 = (files: SkillFile[]) => lockedAt(files, { computedHash: folderHashV2(files) });
+
+  it('should treat a copy that reproduces the lock hash as unedited', async () => {
+    assert.equal((await check(lockedV2(v1), v1, v1)).status, 'up-to-date');
+    assert.equal((await check(lockedV2(v1), edited, v1)).status, 'modified');
+  });
+
+  it('should report outdated without the installed version in the upstream history', async () => {
+    const remote = createRemote(PREFIX, v2, [v2]);
+
+    const report = await checkSkill({ name: 'demo', repo: 'acme/skills', entry: lockedV2(v1), localFiles: v1, withDetails: false, ...remote });
+
+    assert.equal(report.status, 'outdated');
+    assert.deepEqual(remote.historyReads, []);
+  });
+
+  it('should report conflict only when the local copy differs from the locked version', async () => {
+    assert.equal((await check(lockedV2(v1), edited, v2, { history: [v2] })).status, 'conflict');
+  });
+
+  it('should expect the installer to record the upstream hash in the scheme of the lock', async () => {
+    assert.equal((await check(lockedV2(v1), v1, v2, { lockVersion: 2 })).latestHash, folderHashV2(v2));
+    assert.equal((await check(lockedAt(v1), v1, v2, { lockVersion: 1 })).latestHash, folderHash(v2));
+  });
+
+  it('should accept a legacy hash in a version 2 lock', async () => {
+    assert.equal((await check(lockedAt(v1), v1, v2, { lockVersion: 2 })).status, 'outdated');
   });
 });
 

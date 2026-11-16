@@ -72,7 +72,8 @@ export const checkSkills = async ({
         folderTree: (commit: string, folder: string) => client.fetchFolderTree(repo, commit, folder),
         readFile: (commit: string, treeEntry: TreeEntry) => client.fetchFile(repo, commit, treeEntry),
       };
-      return await checkSkill({ name, repo, entry, localFiles, tree, readRemoteFile, history, withDetails, withMerge, minAge, now, scanUpdate });
+      const lockVersion = lock.version;
+      return await checkSkill({ name, repo, entry, localFiles, tree, readRemoteFile, history, withDetails, withMerge, minAge, now, scanUpdate, lockVersion });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { name, status: 'error', installSource: null, url: buildRepoUrl(repo, entry.ref), hasStalePath, message };

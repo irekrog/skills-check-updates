@@ -2,6 +2,14 @@
 
 Release history for `skills-check-updates`.
 
+## [0.4.1] - 2026-11-16
+
+### Fixed
+
+- Read the folder hashes that `skills` 1.8 writes into version 2 locks. Unedited skills installed or migrated by `skills` 1.8 are no longer reported as having local changes once upstream moves on, and `--upgrade` finds the merge base for their local edits again.
+- `--upgrade` runs `skills@1.8.1` for a version 2 lock. `skills@1.7.2` kept the lock's version 2 but recorded a legacy hash, so `skills` 1.8 then treated the updated skill as modified.
+- The summary no longer says that local changes are kept without updating: `scu -u` keeps them and merges upstream changes that do not overlap.
+
 ## [0.4.0] - 2026-10-20
 
 ### Added
@@ -69,6 +77,7 @@ Initial public release.
 - Match installed directory names to the `skills` CLI's name normalization so local edits and age holds are recognized for names such as `My Skill`.
 - Keep `--json --upgrade` output valid JSON by sending upgrade messages to stderr.
 
+[0.4.1]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.4.1
 [0.4.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.4.0
 [0.3.0]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.3.0
 [0.2.1]: https://github.com/irekrog/skills-check-updates/releases/tag/v0.2.1
